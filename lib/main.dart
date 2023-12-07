@@ -16,7 +16,11 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
         theme: ThemeData.dark().copyWith(
-          scaffoldBackgroundColor: Colors.black
+          scaffoldBackgroundColor: Colors.black,
+          appBarTheme: const AppBarTheme(
+            surfaceTintColor: Colors.black,
+            backgroundColor: Colors.black
+          ),
         ),
         home: HomePage(),
         routes: {
