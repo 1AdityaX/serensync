@@ -18,7 +18,7 @@ class HomeContent extends StatelessWidget {
           child: IconButton(
               icon: const Icon(Icons.call),
               onPressed: () {
-                openAppByName('Contacts');
+                openAppByName('Phone');
               },
               iconSize: 32.0),
         ),
