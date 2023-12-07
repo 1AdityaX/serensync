@@ -22,30 +22,51 @@ class _AppListScreenState extends State<AppsPage> {
       final appsAsyncValue = ref.watch(appsProvider);
       return Scaffold(
           appBar: AppBar(
-            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          ),
-          body: appsAsyncValue.when(
-              loading: () {},
-              error: (error, stacktrace) {
-                return null;
-              },
-              data: (apps) {
-                return ListView.builder(
-                  itemCount: apps.length,
-                  itemBuilder: (context, index) {
-                    return ListTile(
-                      title: Text(
-                        apps[index].appName,
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 20),
+            title: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: const Color.fromARGB(255, 25, 25, 25),
+                borderRadius: BorderRadius.circular(23),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.search, color: Colors.white70),
+                  const SizedBox(
+                      width: 8), // Add some space between icon and textfield
+                  Expanded(
+                    child: TextField(
+                      decoration: const InputDecoration(
+                        hintText: 'Search Apps',
+                        border: InputBorder.none,
+                        hintStyle: TextStyle(color: Colors.white70),
                       ),
-                      onTap: () =>
-                          {DeviceApps.openApp(apps[index].packageName)},
-                    );
-                  },
-                  padding: const EdgeInsets.only(left: 20, top: 10, bottom: 30),
+                      onChanged: (query) {
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          body: appsAsyncValue.when(loading: () {
+            return null;
+          }, error: (error, stacktrace) {
+            return null;
+          }, data: (apps) {
+            return ListView.builder(
+              itemCount: apps.length,
+              itemBuilder: (context, index) {
+                return ListTile(
+                  title: Text(
+                    apps[index].appName,
+                    style: const TextStyle(color: Colors.white, fontSize: 20),
+                  ),
+                  onTap: () => {DeviceApps.openApp(apps[index].packageName)},
                 );
-              }));
+              },
+              padding: const EdgeInsets.only(left: 20, bottom: 30),
+            );
+          }));
     });
   }
 }
