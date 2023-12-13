@@ -11,6 +11,8 @@ class AppsPage extends StatefulWidget {
 }
 
 class _AppListScreenState extends State<AppsPage> {
+  String searchQuery = '';
+
   @override
   void initState() {
     super.initState();
@@ -31,8 +33,7 @@ class _AppListScreenState extends State<AppsPage> {
               child: Row(
                 children: [
                   const Icon(Icons.search, color: Colors.white70),
-                  const SizedBox(
-                      width: 8), // Add some space between icon and textfield
+                  const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
                       decoration: const InputDecoration(
@@ -41,6 +42,9 @@ class _AppListScreenState extends State<AppsPage> {
                         hintStyle: TextStyle(color: Colors.white70),
                       ),
                       onChanged: (query) {
+                        setState(() {
+                          searchQuery = query;
+                        });
                       },
                     ),
                   ),
@@ -53,15 +57,16 @@ class _AppListScreenState extends State<AppsPage> {
           }, error: (error, stacktrace) {
             return null;
           }, data: (apps) {
+            final filteredApps = apps.where((app) => app.appName.toLowerCase().contains(searchQuery.toLowerCase())).toList();
             return ListView.builder(
-              itemCount: apps.length,
+              itemCount: filteredApps.length,
               itemBuilder: (context, index) {
                 return ListTile(
                   title: Text(
-                    apps[index].appName,
+                    filteredApps[index].appName,
                     style: const TextStyle(color: Colors.white, fontSize: 20),
                   ),
-                  onTap: () => {DeviceApps.openApp(apps[index].packageName)},
+                  onTap: () => {DeviceApps.openApp(filteredApps[index].packageName)},
                 );
               },
               padding: const EdgeInsets.only(left: 20, bottom: 30),
