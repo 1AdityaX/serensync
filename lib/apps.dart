@@ -11,11 +11,16 @@ class AppsPage extends StatefulWidget {
 }
 
 class _AppListScreenState extends State<AppsPage> {
-  String searchQuery = '';
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+  final ValueNotifier<bool> _isFocused = ValueNotifier<bool>(false);
 
   @override
   void initState() {
     super.initState();
+    _focusNode.addListener(() {
+      _isFocused.value = _focusNode.hasFocus;
+    });
   }
 
   @override
@@ -25,17 +30,42 @@ class _AppListScreenState extends State<AppsPage> {
       return Scaffold(
           appBar: AppBar(
             title: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              height: 45,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
               decoration: BoxDecoration(
                 color: const Color.fromARGB(255, 25, 25, 25),
                 borderRadius: BorderRadius.circular(23),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.search, color: Colors.white70),
+                  ValueListenableBuilder(
+                      valueListenable: _isFocused,
+                      builder: (BuildContext context, bool isFocused,
+                          Widget? child) {
+                        return IconButton(
+                          onPressed: () {
+                            if (isFocused) {
+                              setState(() {
+                                _focusNode.unfocus();
+                                _controller.clear();
+                              });
+                            } else {
+                              _focusNode.requestFocus();
+                            }
+                          },
+                          icon: Icon(
+                            _focusNode.hasFocus
+                                ? Icons.arrow_back
+                                : Icons.search,
+                            color: Colors.white70,
+                          ),
+                        );
+                      }),
                   const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
+                      controller: _controller,
+                      focusNode: _focusNode,
                       decoration: const InputDecoration(
                         hintText: 'Search Apps',
                         border: InputBorder.none,
@@ -43,11 +73,24 @@ class _AppListScreenState extends State<AppsPage> {
                       ),
                       onChanged: (query) {
                         setState(() {
-                          searchQuery = query;
+                          _controller.text = query;
                         });
                       },
                     ),
                   ),
+                  IconButton(
+                      icon: _controller.text.isEmpty
+                          ? const Icon(Icons.settings)
+                          : const Icon(Icons.clear),
+                      onPressed: () {
+                        if (_controller.text.isNotEmpty) {
+                          setState(() {
+                            _controller.clear();
+                          });
+                        } else {
+                          _focusNode.unfocus();
+                        }
+                      })
                 ],
               ),
             ),
@@ -57,7 +100,11 @@ class _AppListScreenState extends State<AppsPage> {
           }, error: (error, stacktrace) {
             return null;
           }, data: (apps) {
-            final filteredApps = apps.where((app) => app.appName.toLowerCase().contains(searchQuery.toLowerCase())).toList();
+            final filteredApps = apps
+                .where((app) => app.appName
+                    .toLowerCase()
+                    .contains(_controller.text.toLowerCase()))
+                .toList();
             return ListView.builder(
               itemCount: filteredApps.length,
               itemBuilder: (context, index) {
@@ -66,12 +113,26 @@ class _AppListScreenState extends State<AppsPage> {
                     filteredApps[index].appName,
                     style: const TextStyle(color: Colors.white, fontSize: 20),
                   ),
-                  onTap: () => {DeviceApps.openApp(filteredApps[index].packageName)},
+                  onTap: () => {
+                    DeviceApps.openApp(filteredApps[index].packageName),
+                    setState(() {
+                      _controller.clear();
+                      _focusNode.unfocus();
+                    }),
+                  },
                 );
               },
-              padding: const EdgeInsets.only(left: 20, bottom: 30),
+              padding: const EdgeInsets.only(left: 20),
             );
           }));
     });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    _controller.dispose();
+    _isFocused.dispose();
+    super.dispose();
   }
 }
