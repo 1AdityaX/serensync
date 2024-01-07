@@ -21,6 +21,16 @@ class MyApp extends StatelessWidget {
             surfaceTintColor: Colors.black,
             backgroundColor: Colors.black
           ),
+          listTileTheme: const ListTileThemeData(
+            iconColor: Colors.white,
+            tileColor: Colors.black,
+            titleTextStyle: TextStyle(color: Colors.white, fontSize: 20),
+          ),
+          dialogTheme: const DialogTheme(
+            backgroundColor: Colors.black
+          )
+          
+          
         ),
         home: HomePage(),
         routes: {
