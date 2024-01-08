@@ -25,134 +25,153 @@ class _AppListScreenState extends State<AppsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer(builder: (context, ref, child) {
-      final appsAsyncValue = ref.watch(appsProvider);
-      return Scaffold(
-          appBar: AppBar(
-            title: Container(
-              height: 45,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(
-                color: const Color.fromARGB(255, 25, 25, 25),
-                borderRadius: BorderRadius.circular(23),
-              ),
-              child: Row(
-                children: [
-                  ValueListenableBuilder(
-                      valueListenable: _isFocused,
-                      builder: (BuildContext context, bool isFocused,
-                          Widget? child) {
-                        return IconButton(
-                          onPressed: () {
-                            if (isFocused) {
-                              setState(() {
-                                _focusNode.unfocus();
-                                _controller.clear();
-                              });
-                            } else {
-                              _focusNode.requestFocus();
-                            }
-                          },
-                          icon: Icon(
-                            _focusNode.hasFocus
-                                ? Icons.arrow_back
-                                : Icons.search,
-                            color: Colors.white70,
-                          ),
-                        );
-                      }),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      focusNode: _focusNode,
-                      decoration: const InputDecoration(
-                        hintText: 'Search Apps',
-                        border: InputBorder.none,
-                        hintStyle: TextStyle(color: Colors.white70),
-                      ),
-                      onChanged: (query) {
-                        setState(() {
-                          _controller.text = query;
-                        });
-                      },
+    return Scaffold(
+        appBar: AppBar(
+          title: Container(
+            height: 45,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: const Color.fromARGB(255, 25, 25, 25),
+              borderRadius: BorderRadius.circular(23),
+            ),
+            child: Row(
+              children: [
+                ValueListenableBuilder(
+                    valueListenable: _isFocused,
+                    builder:
+                        (BuildContext context, bool isFocused, Widget? child) {
+                      return IconButton(
+                        onPressed: () {
+                          if (isFocused) {
+                            setState(() {
+                              _focusNode.unfocus();
+                              _controller.clear();
+                            });
+                          } else {
+                            _focusNode.requestFocus();
+                          }
+                        },
+                        icon: Icon(
+                          _focusNode.hasFocus ? Icons.arrow_back : Icons.search,
+                          color: Colors.white70,
+                        ),
+                      );
+                    }),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    decoration: const InputDecoration(
+                      hintText: 'Search Apps',
+                      border: InputBorder.none,
+                      hintStyle: TextStyle(color: Colors.white70),
                     ),
+                    onChanged: (query) {
+                      setState(() {
+                        _controller.text = query;
+                      });
+                    },
                   ),
-                  IconButton(
-                      icon: _controller.text.isEmpty
-                          ? const Icon(Icons.settings)
-                          : const Icon(Icons.clear),
-                      onPressed: () {
-                        if (_controller.text.isNotEmpty) {
-                          setState(() {
-                            _controller.clear();
-                          });
-                        } else {
-                          _focusNode.unfocus();
-                        }
-                      })
-                ],
-              ),
+                ),
+                IconButton(
+                    icon: _controller.text.isEmpty
+                        ? const Icon(Icons.settings)
+                        : const Icon(Icons.clear),
+                    onPressed: () {
+                      if (_controller.text.isNotEmpty) {
+                        setState(() {
+                          _controller.clear();
+                        });
+                      } else {
+                        _focusNode.unfocus();
+                      }
+                    })
+              ],
             ),
           ),
-          body: appsAsyncValue.when(loading: () {
-            return null;
-          }, error: (error, stacktrace) {
-            return null;
-          }, data: (apps) {
-            final filteredApps = apps
-                .where((app) => app.appName
-                    .toLowerCase()
-                    .contains(_controller.text.toLowerCase()))
-                .toList();
-            return ListView.builder(
-              itemCount: filteredApps.length,
-              itemBuilder: (ctx, index) {
-                return ListTile(
-                  title: Text(
-                    filteredApps[index].appName,
-                  ),
-                  onTap: () => {
-                    DeviceApps.openApp(filteredApps[index].packageName),
-                    setState(() {
-                      _controller.clear();
-                      _focusNode.unfocus();
-                    }),
-                  },
-                  onLongPress: () =>
-                      showPopupDialog(filteredApps[index].packageName),
-                );
-              },
-              padding: const EdgeInsets.only(left: 20),
-            );
-          }));
-    });
+        ),
+        body: Consumer(
+          builder: (context, ref, child) {
+            final appsAsyncValue = ref.watch(appsProvider);
+            return appsAsyncValue.when(loading: () {
+              return const Center(child: CircularProgressIndicator());
+            }, error: (error, stackTrace) {
+              return const Center(child: Text('Error'));
+            }, data: (apps) {
+              final filteredApps = apps
+                  .where((app) => app.appName
+                      .toLowerCase()
+                      .contains(_controller.text.toLowerCase()))
+                  .toList();
+              return ListView.builder(
+                itemCount: filteredApps.length,
+                itemBuilder: (buildContext, index) {
+                  return ListTile(
+                    title: Text(
+                      filteredApps[index].appName,
+                    ),
+                    onTap: () => {
+                      DeviceApps.openApp(filteredApps[index].packageName),
+                      setState(() {
+                        _controller.clear();
+                        _focusNode.unfocus();
+                      }),
+                    },
+                    onLongPress: () => showPopupDialog(filteredApps[index]),
+                  );
+                },
+                padding: const EdgeInsets.only(left: 20),
+              );
+            });
+          },
+        ));
   }
 
-  Future<void> showPopupDialog(String AppName) async => showDialog(
+  Future<void> showPopupDialog(Application app) async => showDialog(
       context: context,
       builder: (context) => Dialog(
-              child: Column(mainAxisSize: MainAxisSize.min, children: <ListTile>[
-                ListTile(
-                    title: const Text('Settings'),
+              child: Container(
+            padding: const EdgeInsets.all(0),
+            decoration: BoxDecoration(
+                border: Border.all(color: Colors.white), color: Colors.black),
+            child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.white),
+                    ),
+                    child: ListTile(
+                      title: Center(child: Text(app.appName)),
+                    ),
+                  ),
+                  ListTile(
+                      title: const Text('Settings'),
+                      leading: const Icon(Icons.settings_outlined),
+                      onTap: () async {
+                        await DeviceApps.openAppSettings(app.packageName);
+                      }),
+                  ListTile(
+                    title: const Text('Uninstall'),
+                    leading: const Icon(Icons.delete_outline),
                     onTap: () async {
-                      await DeviceApps.openAppSettings(AppName);
-                    }),
-                ListTile(
-                  title: const Text('Uninstall'),
-                  onTap: () async {
-                    await DeviceApps.uninstallApp(AppName);
-                  },
-                ),
-                ListTile(
-                  title: const Text('Hide app'),
-                  onTap: () {},
-                ),
-                ListTile(
-                  title: const Text('Lock App'),
-                  onTap: () {},
-                ),
-              ])));
+                      await DeviceApps.uninstallApp(app.packageName);
+                    },
+                  ),
+                  ListTile(
+                    title: const Text('Hide app'),
+                    leading: const Icon(Icons.visibility_off_outlined),
+                    onTap: () {},
+                  ),
+                  ListTile(
+                    title: const Text('Lock App'),
+                    leading: const Icon(Icons.lock_outline),
+                    onTap: () {},
+                  ),
+                ]),
+          )));
 
   @override
   void dispose() {
