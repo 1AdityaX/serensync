@@ -14,24 +14,17 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
+        debugShowCheckedModeBanner: false,
         theme: ThemeData.dark().copyWith(
-          scaffoldBackgroundColor: Colors.black,
-          appBarTheme: const AppBarTheme(
-            surfaceTintColor: Colors.black,
-            backgroundColor: Colors.black
-          ),
-          listTileTheme: const ListTileThemeData(
-            iconColor: Colors.white,
-            tileColor: Colors.black,
-            titleTextStyle: TextStyle(color: Colors.white, fontSize: 20),
-          ),
-          dialogTheme: const DialogTheme(
-            backgroundColor: Colors.black
-          )
-          
-          
-        ),
+            scaffoldBackgroundColor: Colors.black,
+            appBarTheme: const AppBarTheme(
+                surfaceTintColor: Colors.black, backgroundColor: Colors.black),
+            listTileTheme: const ListTileThemeData(
+              iconColor: Colors.white,
+              tileColor: Colors.black,
+              titleTextStyle: TextStyle(color: Colors.white, fontSize: 20),
+            ),
+            dialogTheme: const DialogTheme(backgroundColor: Colors.black)),
         home: HomePage(),
         routes: {
           "apps": (_) => const AppsPage(),
@@ -49,11 +42,7 @@ class HomePage extends StatelessWidget {
     return Scaffold(
       body: PageView(
         controller: _pageController,
-        children: const [
-          HomeContent(),
-          AppsPage()
-          
-        ],
+        children: const [HomeContent(), AppsPage()],
       ),
     );
   }

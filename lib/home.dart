@@ -3,7 +3,7 @@ import 'package:serensync/helpers/app_open.dart';
 import 'package:serensync/widgets/clock.dart';
 
 class HomeContent extends StatelessWidget {
-  const HomeContent({Key? key});
+  const HomeContent({super.key});
 
   @override
   Widget build(BuildContext context) {
