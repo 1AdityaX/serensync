@@ -147,28 +147,36 @@ class _AppListScreenState extends State<AppsPage> {
                       title: Center(child: Text(app.appName)),
                     ),
                   ),
-                  ListTile(
-                      title: const Text('Settings'),
-                      leading: const Icon(Icons.settings_outlined),
+                  Material(
+                    child: ListTile(
+                        title: const Text('Settings'),
+                        leading: const Icon(Icons.settings_outlined),
+                        onTap: () async {
+                          await DeviceApps.openAppSettings(app.packageName);
+                        }),
+                  ),
+                  Material(
+                    child: ListTile(
+                      title: const Text('Uninstall'),
+                      leading: const Icon(Icons.delete_outline),
                       onTap: () async {
-                        await DeviceApps.openAppSettings(app.packageName);
-                      }),
-                  ListTile(
-                    title: const Text('Uninstall'),
-                    leading: const Icon(Icons.delete_outline),
-                    onTap: () async {
-                      await DeviceApps.uninstallApp(app.packageName);
-                    },
+                        await DeviceApps.uninstallApp(app.packageName);
+                      },
+                    ),
                   ),
-                  ListTile(
-                    title: const Text('Hide app'),
-                    leading: const Icon(Icons.visibility_off_outlined),
-                    onTap: () {},
+                  Material(
+                    child: ListTile(
+                      title: const Text('Hide app'),
+                      leading: const Icon(Icons.visibility_off_outlined),
+                      onTap: () {},
+                    ),
                   ),
-                  ListTile(
-                    title: const Text('Lock App'),
-                    leading: const Icon(Icons.lock_outline),
-                    onTap: () {},
+                  Material(
+                    child: ListTile(
+                      title: const Text('Lock App'),
+                      leading: const Icon(Icons.lock_outline),
+                      onTap: () {},
+                    ),
                   ),
                 ]),
           )));
