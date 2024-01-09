@@ -7,10 +7,10 @@ class AppsPage extends StatefulWidget {
   const AppsPage({super.key});
 
   @override
-  _AppListScreenState createState() => _AppListScreenState();
+  AppListScreenState createState() => AppListScreenState();
 }
 
-class _AppListScreenState extends State<AppsPage> {
+class AppListScreenState extends State<AppsPage> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final ValueNotifier<bool> _isFocused = ValueNotifier<bool>(false);
@@ -151,16 +151,18 @@ class _AppListScreenState extends State<AppsPage> {
                     child: ListTile(
                         title: const Text('Settings'),
                         leading: const Icon(Icons.settings_outlined),
-                        onTap: () async {
-                          await DeviceApps.openAppSettings(app.packageName);
+                        onTap: () {
+                          DeviceApps.openAppSettings(app.packageName);
+                          Navigator.of(context).pop();
                         }),
                   ),
                   Material(
                     child: ListTile(
                       title: const Text('Uninstall'),
                       leading: const Icon(Icons.delete_outline),
-                      onTap: () async {
-                        await DeviceApps.uninstallApp(app.packageName);
+                      onTap: () {
+                        DeviceApps.uninstallApp(app.packageName);
+                        Navigator.of(context).pop();
                       },
                     ),
                   ),
@@ -168,14 +170,18 @@ class _AppListScreenState extends State<AppsPage> {
                     child: ListTile(
                       title: const Text('Hide app'),
                       leading: const Icon(Icons.visibility_off_outlined),
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.of(context).pop();
+                      },
                     ),
                   ),
                   Material(
                     child: ListTile(
                       title: const Text('Lock App'),
                       leading: const Icon(Icons.lock_outline),
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.of(context).pop();
+                      },
                     ),
                   ),
                 ]),

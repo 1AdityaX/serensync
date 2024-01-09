@@ -5,10 +5,10 @@ class ClockWidget extends StatefulWidget {
   const ClockWidget({super.key});
 
   @override
-  _ClockWidgetState createState() => _ClockWidgetState();
+  ClockWidgetState createState() => ClockWidgetState();
 }
 
-class _ClockWidgetState extends State<ClockWidget> {
+class ClockWidgetState extends State<ClockWidget> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder(
