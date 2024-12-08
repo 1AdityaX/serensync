@@ -3,14 +3,14 @@ import 'package:device_apps/device_apps.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:serensync/helpers/app_state.dart';
 
-class AppsPage extends StatefulWidget {
+class AppsPage extends ConsumerStatefulWidget {
   const AppsPage({super.key});
 
   @override
-  AppListScreenState createState() => AppListScreenState();
+  ConsumerState<AppsPage> createState() => _AppsPageState();
 }
 
-class AppListScreenState extends State<AppsPage> {
+class _AppsPageState extends ConsumerState<AppsPage> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final ValueNotifier<bool> _isFocused = ValueNotifier<bool>(false);
@@ -26,10 +26,20 @@ class AppListScreenState extends State<AppsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        appBar: AppBar(
-          title: _searchBar(),
-        ),
-        body: _appsList());
+      appBar: AppBar(
+        title: _searchBar(),
+      ),
+      body: StreamBuilder<ApplicationEvent>(
+        stream: DeviceApps.listenToAppsChanges(),
+        builder: (context, snapshot) {
+          // Trigger a rebuild of the apps list when an app event occurs
+          if (snapshot.hasData) {
+            ref.invalidate(appsProvider);
+          }
+          return _appsList();
+        },
+      ),
+    );
   }
 
   Widget _searchBar() {
