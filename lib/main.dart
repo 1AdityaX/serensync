@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:serensync/apps.dart';
-import 'package:serensync/home.dart';
+import 'package:serensync/pages/apps.dart';
+import 'package:serensync/pages/home.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 void main() {
