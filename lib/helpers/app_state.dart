@@ -1,23 +1,23 @@
-import 'package:device_apps/device_apps.dart';
+import 'package:apps_handler/apps_handler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-final appsProvider = AsyncNotifierProvider<AppsNotifier, List<Application>>(() {
+final appsProvider = AsyncNotifierProvider<AppsNotifier, List<AppInfo>>(() {
   return AppsNotifier();
 });
 
-class AppsNotifier extends AsyncNotifier<List<Application>> {
+class AppsNotifier extends AsyncNotifier<List<AppInfo>> {
   @override
-  Future<List<Application>> build() async {
+  Future<List<AppInfo>> build() async {
     // Listen to app install/uninstall events
-    DeviceApps.listenToAppsChanges().listen((event) {
+    AppsHandler.appChanges.listen((event) {
       // Refresh the apps list when changes occur
       ref.invalidateSelf();
     });
     return _loadApps();
   }
 
-  Future<List<Application>> _loadApps() async {
-    final apps = await DeviceApps.getInstalledApplications(
+  Future<List<AppInfo>> _loadApps() async {
+    final apps = await AppsHandler.getInstalledApps(
       onlyAppsWithLaunchIntent: true,
       includeSystemApps: true,
     );
