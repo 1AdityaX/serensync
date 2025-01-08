@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class AppsTimerPage extends StatelessWidget {
-  const AppsTimerPage({super.key});
+class AppsTimerScreen extends StatelessWidget {
+  const AppsTimerScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

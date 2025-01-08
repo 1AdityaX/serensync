@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class HiddenAppsPage extends StatelessWidget {
-  const HiddenAppsPage({super.key});
+class HiddenAppsScreen extends StatelessWidget {
+  const HiddenAppsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

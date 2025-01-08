@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class MonochromeModePage extends StatelessWidget {
-  const MonochromeModePage({super.key});
+class MonochromeModeScreen extends StatelessWidget {
+  const MonochromeModeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

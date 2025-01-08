@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class RenamedAppsPage extends StatelessWidget {
-  const RenamedAppsPage({super.key});
+class RenamedAppsScreen extends StatelessWidget {
+  const RenamedAppsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class NotificationsFilterPage extends StatelessWidget {
-  const NotificationsFilterPage({super.key});
+class NotificationsFilterScreen extends StatelessWidget {
+  const NotificationsFilterScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

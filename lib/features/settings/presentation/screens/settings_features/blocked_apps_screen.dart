@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class BlockedAppsPage extends StatelessWidget {
-  const BlockedAppsPage({super.key});
+class BlockedAppsScreen extends StatelessWidget {
+  const BlockedAppsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

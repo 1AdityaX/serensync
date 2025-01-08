@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class AppsUsagePage extends StatelessWidget {
-  const AppsUsagePage({super.key});
+class AppsUsageScreen extends StatelessWidget {
+  const AppsUsageScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
