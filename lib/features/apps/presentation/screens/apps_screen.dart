@@ -1,82 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:apps_handler/apps_handler.dart';
-import '../../../../core/providers/app_provider.dart';
+import '../providers/app_provider.dart';
 import '../widgets/app_search_bar.dart';
 import '../widgets/app_options_dialog.dart';
 
-class AppsScreen extends ConsumerStatefulWidget {
+class AppsScreen extends ConsumerWidget {
   const AppsScreen({super.key});
 
   @override
-  ConsumerState<AppsScreen> createState() => _AppsScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final filteredApps = ref.watch(filteredAppsProvider);
 
-class _AppsScreenState extends ConsumerState<AppsScreen> {
-  final TextEditingController _controller = TextEditingController();
-  final FocusNode _focusNode = FocusNode();
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: AppSearchBar(
-          controller: _controller,
-          onChanged: (value) => setState(() {}),
-          focusNode: _focusNode,
-        ),
-      ),
-      body: _buildAppsList(),
-    );
-  }
-
-  Widget _buildAppsList() {
-    final appsAsyncValue = ref.watch(appsProvider);
-
-    return appsAsyncValue.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) => const Center(child: Text('Error loading apps')),
-      data: (apps) {
-        final filteredApps = apps
-            .where((app) => app.appName
-                .toLowerCase()
-                .contains(_controller.text.toLowerCase()))
-            .toList();
-
-        return ListView.builder(
+      appBar: AppBar(title: const AppSearchBar()),
+      body: filteredApps.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (_, _) => const Center(child: Text('Error loading apps')),
+        data: (apps) => ListView.builder(
           padding: const EdgeInsets.only(left: 35),
-          itemCount: filteredApps.length,
+          itemCount: apps.length,
           itemBuilder: (context, index) {
-            final app = filteredApps[index];
+            final app = apps[index];
             return ListTile(
-              contentPadding: const EdgeInsets.all(0),
+              contentPadding: EdgeInsets.zero,
               title: Text(app.appName),
               onTap: () {
-                AppsHandler.openApp(app.packageName);
-                setState(() {
-                  _controller.clear();
-                  _focusNode.unfocus();
-                });
+                ref.read(appRepositoryProvider).openApp(app.packageName);
+                ref.read(searchQueryProvider.notifier).clear();
               },
-              onLongPress: () => _showAppOptions(app),
+              onLongPress: () => _showAppOptions(context, app),
             );
           },
-        );
-      },
+        ),
+      ),
     );
   }
 
-  Future<void> _showAppOptions(AppInfo app) async {
-    return showDialog(
+  void _showAppOptions(BuildContext context, AppInfo app) {
+    showDialog(
       context: context,
-      builder: (context) => AppOptionsDialog(app: app),
+      builder: (_) => AppOptionsDialog(app: app),
     );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
   }
 }

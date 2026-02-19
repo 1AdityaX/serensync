@@ -6,8 +6,8 @@ class RenamedAppsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Renamed Apps')),
-      body: Center(child: Text('Renamed Apps Page')),
+      appBar: AppBar(title: const Text('Renamed Apps')),
+      body: const Center(child: Text('Renamed Apps Page')),
     );
   }
 }

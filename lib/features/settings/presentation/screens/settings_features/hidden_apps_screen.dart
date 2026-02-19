@@ -6,8 +6,8 @@ class HiddenAppsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Hidden Apps')),
-      body: Center(child: Text('Hidden Apps Page')),
+      appBar: AppBar(title: const Text('Hidden Apps')),
+      body: const Center(child: Text('Hidden Apps Page')),
     );
   }
 }

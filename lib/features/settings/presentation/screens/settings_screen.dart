@@ -10,38 +10,17 @@ import 'settings_features/notifications_filter_screen.dart';
 import 'settings_features/renamed_apps_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
-  final List<SettingsItem> settingsItems = const [
-    SettingsItem(
-      title: 'Monochrome Mode',
-      page: MonochromeModeScreen(),
-    ),
-    SettingsItem(
-      title: 'Hidden Apps',
-      page: HiddenAppsScreen(),
-    ),
-    SettingsItem(
-      title: 'Renamed Apps',
-      page: RenamedAppsScreen(),
-    ),
-    SettingsItem(
-      title: 'Locked Apps',
-      page: BlockedAppsScreen(),
-    ),
-    SettingsItem(
-      title: 'Apps Timer',
-      page: AppsTimerScreen(),
-    ),
-    SettingsItem(
-      title: 'Notification Filter',
-      page: NotificationsFilterScreen(),
-    ),
-    SettingsItem(
-      title: 'Apps Usage',
-      page: AppsUsageScreen(),
-    ),
-  ];
-
   const SettingsScreen({super.key});
+
+  static final List<SettingsItem> _settingsItems = [
+    SettingsItem(title: 'Monochrome Mode', builder: (_) => const MonochromeModeScreen()),
+    SettingsItem(title: 'Hidden Apps', builder: (_) => const HiddenAppsScreen()),
+    SettingsItem(title: 'Renamed Apps', builder: (_) => const RenamedAppsScreen()),
+    SettingsItem(title: 'Locked Apps', builder: (_) => const BlockedAppsScreen()),
+    SettingsItem(title: 'Apps Timer', builder: (_) => const AppsTimerScreen()),
+    SettingsItem(title: 'Notification Filter', builder: (_) => const NotificationsFilterScreen()),
+    SettingsItem(title: 'Apps Usage', builder: (_) => const AppsUsageScreen()),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -55,9 +34,9 @@ class SettingsScreen extends StatelessWidget {
       ),
       body: ListView.builder(
         padding: const EdgeInsets.only(top: 7.0),
-        itemCount: settingsItems.length,
+        itemCount: _settingsItems.length,
         itemBuilder: (context, index) => SettingsListItem(
-          item: settingsItems[index],
+          item: _settingsItems[index],
         ),
       ),
     );

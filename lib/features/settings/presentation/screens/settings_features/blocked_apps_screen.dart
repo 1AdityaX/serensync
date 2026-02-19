@@ -6,8 +6,8 @@ class BlockedAppsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Blocked Apps')),
-      body: Center(child: Text('Blocked Apps Page')),
+      appBar: AppBar(title: const Text('Blocked Apps')),
+      body: const Center(child: Text('Blocked Apps Page')),
     );
   }
 }

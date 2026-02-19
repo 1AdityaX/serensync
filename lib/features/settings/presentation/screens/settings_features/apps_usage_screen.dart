@@ -6,8 +6,8 @@ class AppsUsageScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Apps Usage')),
-      body: Center(child: Text('Apps Usage Page')),
+      appBar: AppBar(title: const Text('Apps Usage')),
+      body: const Center(child: Text('Apps Usage Page')),
     );
   }
 }

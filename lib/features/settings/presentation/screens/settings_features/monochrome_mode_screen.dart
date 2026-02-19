@@ -6,8 +6,8 @@ class MonochromeModeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Monochrome Mode')),
-      body: Center(child: Text('Monochrome Mode Page')),
+      appBar: AppBar(title: const Text('Monochrome Mode')),
+      body: const Center(child: Text('Monochrome Mode Page')),
     );
   }
 }

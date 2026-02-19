@@ -6,8 +6,8 @@ class NotificationsFilterScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Notications Apps')),
-      body: Center(child: Text('Notifications Apps Page')),
+      appBar: AppBar(title: const Text('Notification Filter')),
+      body: const Center(child: Text('Notification Filter Page')),
     );
   }
 }

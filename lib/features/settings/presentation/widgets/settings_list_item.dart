@@ -17,7 +17,7 @@ class SettingsListItem extends StatelessWidget {
         title: Text(item.title),
         onTap: () => Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => item.page),
+          MaterialPageRoute(builder: item.builder),
         ),
       ),
     );

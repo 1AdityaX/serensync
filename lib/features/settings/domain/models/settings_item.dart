@@ -1,11 +1,11 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 class SettingsItem {
   final String title;
-  final Widget page;
+  final WidgetBuilder builder;
 
   const SettingsItem({
     required this.title,
-    required this.page,
+    required this.builder,
   });
 }
