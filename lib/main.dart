@@ -5,13 +5,14 @@ import 'apps/apps_screen.dart';
 import 'home/home_screen.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
   final AppService appService;
 
-  const MyApp({super.key, this.appService = const AppService()});
+  MyApp({super.key, AppService? appService})
+    : appService = appService ?? AppService();
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +47,7 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   late final PageController _pageController;
+  int _currentPage = 0;
 
   @override
   void initState() {
@@ -61,13 +63,26 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: PageView(
-        controller: _pageController,
-        children: <Widget>[
-          HomeScreen(appService: widget.appService),
-          AppsScreen(appService: widget.appService),
-        ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _currentPage != 0) {
+          _pageController.animateToPage(
+            0,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+          );
+        }
+      },
+      child: Scaffold(
+        body: PageView(
+          controller: _pageController,
+          onPageChanged: (page) => _currentPage = page,
+          children: <Widget>[
+            HomeScreen(appService: widget.appService),
+            AppsScreen(appService: widget.appService),
+          ],
+        ),
       ),
     );
   }

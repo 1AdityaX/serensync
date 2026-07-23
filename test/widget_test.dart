@@ -60,6 +60,44 @@ void main() {
     await tester.pump();
 
     expect(find.text('Gamma'), findsOneWidget);
+    expect(appService.forceRefreshes, 1);
+  });
+
+  testWidgets('leaving and reopening app drawer does not reload apps', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(MyApp(appService: appService));
+    await tester.pump();
+
+    await tester.drag(find.byType(PageView), const Offset(-500, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Alpha'), findsOneWidget);
+    expect(appService.appListLoads, 1);
+
+    await tester.drag(find.byType(PageView), const Offset(500, 0));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(PageView), const Offset(-500, 0));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alpha'), findsOneWidget);
+    expect(appService.appListLoads, 1);
+  });
+
+  testWidgets('back from app drawer returns home without reloading apps', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(MyApp(appService: appService));
+    await tester.pump();
+
+    await tester.drag(find.byType(PageView), const Offset(-500, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Alpha'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alpha'), findsNothing);
+    expect(appService.appListLoads, 1);
   });
 }
 
@@ -75,12 +113,18 @@ class TestApp extends StatelessWidget {
 class FakeAppService extends AppService {
   final StreamController<AppEvent> _changes = StreamController.broadcast();
   final List<String> openedPackages = [];
+  int appListLoads = 0;
+  int forceRefreshes = 0;
   List<AppInfo> apps;
 
   FakeAppService(this.apps);
 
   @override
-  Future<List<AppInfo>> getInstalledApps() async => apps;
+  Future<List<AppInfo>> getInstalledApps({bool forceRefresh = false}) async {
+    appListLoads++;
+    if (forceRefresh) forceRefreshes++;
+    return apps;
+  }
 
   @override
   Future<void> openApp(String packageName) async {

@@ -17,7 +17,8 @@ class AppsScreen extends StatefulWidget {
   State<AppsScreen> createState() => _AppsScreenState();
 }
 
-class _AppsScreenState extends State<AppsScreen> {
+class _AppsScreenState extends State<AppsScreen>
+    with AutomaticKeepAliveClientMixin {
   StreamSubscription<AppEvent>? _appChangesSubscription;
   List<AppInfo>? _apps;
   Object? _loadError;
@@ -43,13 +44,15 @@ class _AppsScreenState extends State<AppsScreen> {
 
   void _subscribeToAppChanges() {
     _appChangesSubscription = widget.appService.appChanges.listen(
-      (_) => _loadApps(),
+      (_) => _loadApps(forceRefresh: true),
     );
   }
 
-  Future<void> _loadApps() async {
+  Future<void> _loadApps({bool forceRefresh = false}) async {
     try {
-      final apps = await widget.appService.getInstalledApps();
+      final apps = await widget.appService.getInstalledApps(
+        forceRefresh: forceRefresh,
+      );
       if (!mounted) return;
       setState(() {
         _apps = apps;
@@ -83,6 +86,7 @@ class _AppsScreenState extends State<AppsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       appBar: AppBar(
         title: AppSearchBar(
@@ -94,6 +98,9 @@ class _AppsScreenState extends State<AppsScreen> {
       body: _buildBody(),
     );
   }
+
+  @override
+  bool get wantKeepAlive => true;
 
   Widget _buildBody() {
     if (_loadError != null && _apps == null) {
