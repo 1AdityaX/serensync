@@ -1,20 +1,20 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:apps_handler/apps_handler.dart';
-import '../providers/app_provider.dart';
+import 'package:flutter/material.dart';
 
-class AppOptionsDialog extends ConsumerWidget {
+import '../app_service.dart';
+
+class AppOptionsDialog extends StatelessWidget {
   final AppInfo app;
+  final AppService appService;
 
   const AppOptionsDialog({
     super.key,
     required this.app,
+    required this.appService,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final repo = ref.read(appRepositoryProvider);
-
+  Widget build(BuildContext context) {
     return Dialog(
       child: Container(
         padding: EdgeInsets.zero,
@@ -30,15 +30,13 @@ class AppOptionsDialog extends ConsumerWidget {
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.white),
               ),
-              child: ListTile(
-                title: Center(child: Text(app.appName)),
-              ),
+              child: ListTile(title: Center(child: Text(app.appName))),
             ),
             ListTile(
               title: const Text('Settings'),
               leading: const Icon(Icons.settings_outlined),
               onTap: () {
-                repo.openAppSettings(app.packageName);
+                appService.openAppSettings(app.packageName);
                 Navigator.of(context).pop();
               },
             ),
@@ -46,7 +44,7 @@ class AppOptionsDialog extends ConsumerWidget {
               title: const Text('Uninstall'),
               leading: const Icon(Icons.delete_outline),
               onTap: () {
-                repo.uninstallApp(app.packageName);
+                appService.uninstallApp(app.packageName);
                 Navigator.of(context).pop();
               },
             ),

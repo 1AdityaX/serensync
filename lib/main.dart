@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'features/home/presentation/screens/home_screen.dart';
-import 'features/apps/presentation/screens/apps_screen.dart';
+
+import 'apps/app_service.dart';
+import 'apps/apps_screen.dart';
+import 'home/home_screen.dart';
 
 void main() {
-  runApp(const ProviderScope(child: MyApp()));
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final AppService appService;
+
+  const MyApp({super.key, this.appService = const AppService()});
 
   @override
   Widget build(BuildContext context) {
@@ -27,13 +30,15 @@ class MyApp extends StatelessWidget {
         ),
         dialogTheme: const DialogThemeData(backgroundColor: Colors.black),
       ),
-      home: const MainScreen(),
+      home: MainScreen(appService: appService),
     );
   }
 }
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+  final AppService appService;
+
+  const MainScreen({super.key, required this.appService});
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -59,9 +64,9 @@ class _MainScreenState extends State<MainScreen> {
     return Scaffold(
       body: PageView(
         controller: _pageController,
-        children: const <Widget>[
-          HomeScreen(),
-          AppsScreen(),
+        children: <Widget>[
+          HomeScreen(appService: widget.appService),
+          AppsScreen(appService: widget.appService),
         ],
       ),
     );

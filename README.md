@@ -23,58 +23,30 @@ A minimalist Android launcher built with Flutter. SerenSync strips away distract
 
 ## Architecture
 
-SerenSync follows **feature-based clean architecture**:
+SerenSync uses a shallow, feature-first structure. Screens and state stay close
+to the feature that owns them, while reusable visual components live in a
+feature-local `widgets/` folder.
 
 ```
 lib/
-├── core/
-│   └── router/
-│       └── app_router.dart          # Centralized route definitions
-├── features/
-│   ├── apps/
-│   │   ├── data/
-│   │   │   └── repositories/
-│   │   │       └── app_repository_impl.dart
-│   │   ├── domain/
-│   │   │   └── repositories/
-│   │   │       └── app_repository.dart   # Abstract interface
-│   │   └── presentation/
-│   │       ├── providers/
-│   │       │   └── app_provider.dart     # Riverpod providers
-│   │       ├── screens/
-│   │       │   └── apps_screen.dart
-│   │       └── widgets/
-│   │           ├── app_options_dialog.dart
-│   │           └── app_search_bar.dart
-│   ├── home/
-│   │   └── presentation/
-│   │       ├── screens/
-│   │       │   └── home_screen.dart
-│   │       └── widgets/
-│   │           └── clock_widget.dart
-│   └── settings/
-│       ├── domain/
-│       │   └── models/
-│       │       └── settings_item.dart
-│       └── presentation/
-│           ├── screens/
-│           │   ├── settings_screen.dart
-│           │   └── settings_features/   # One screen per setting
-│           └── widgets/
-│               └── settings_list_item.dart
-└── main.dart
+├── main.dart
+├── apps/
+│   ├── app_service.dart             # Boundary around the native apps plugin
+│   ├── apps_screen.dart             # Installed apps, search, and refresh state
+│   └── widgets/
+│       ├── app_options_dialog.dart
+│       └── app_search_bar.dart
+├── home/
+│   ├── home_screen.dart
+│   └── widgets/
+│       └── clock_widget.dart
+└── settings/
+    └── settings_screen.dart
 ```
 
-**State management:** [Riverpod](https://riverpod.dev) (`flutter_riverpod ^3.x`)
-
-**Key providers** (in `features/apps/presentation/providers/app_provider.dart`):
-
-| Provider | Type | Purpose |
-|---|---|---|
-| `appRepositoryProvider` | `Provider<AppRepository>` | Single source of truth for the app repository |
-| `appsProvider` | `AsyncNotifierProvider` | Fetches and caches the installed apps list; auto-refreshes on installs/uninstalls |
-| `searchQueryProvider` | `NotifierProvider<String>` | Current search bar text |
-| `filteredAppsProvider` | `Provider<AsyncValue<List>>` | Derives filtered list from `appsProvider` + `searchQueryProvider` |
+`AppsScreen` owns its loading, filtering, and app-change subscription state.
+`AppService` is constructor-injected so the native boundary can be replaced in
+tests without a dependency-injection framework.
 
 ---
 
@@ -117,10 +89,8 @@ Or, after first launch, press the Home button and choose SerenSync when prompted
 
 | Package | Version | Purpose |
 |---|---|---|
-| `flutter_riverpod` | `^3.2.1` | State management |
 | `apps_handler` | `^1.0.1` | Native plugin for listing, launching, and managing apps |
 | `intl` | `^0.20.2` | Clock time formatting |
-| `cupertino_icons` | `^1.0.8` | iOS-style icons |
 
 ---
 
@@ -139,7 +109,9 @@ These may differ on some manufacturer ROMs (Samsung, Xiaomi, etc.). Configurable
 
 ## Development Notes
 
-- All navigation is centralized through `AppRouter` in `core/router/`
-- The search bar manages its own `TextEditingController` and syncs with `searchQueryProvider` via `ref.listen` — clearing the provider (e.g., on app tap) automatically clears the text field
-- The app stream subscription in `AppsNotifier` is cancelled via `ref.onDispose` to prevent memory leaks
-- Settings screens under `settings_features/` are currently placeholder stubs
+- Navigation uses Flutter's `Navigator` directly.
+- The search bar receives its value and callbacks from `AppsScreen`; clearing
+  search after an app launch updates both the list and text field.
+- `AppsScreen` cancels its native app-change subscription when disposed.
+- Settings features are currently represented by a single reusable placeholder
+  screen until their behavior is implemented.
