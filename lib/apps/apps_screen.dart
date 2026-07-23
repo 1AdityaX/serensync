@@ -81,7 +81,7 @@ class _AppsScreenState extends State<AppsScreen>
 
   Future<void> _openApp(AppInfo app) async {
     setState(() => _searchQuery = '');
-    await widget.appService.openApp(app.packageName);
+    await widget.appService.openApp(app);
   }
 
   @override

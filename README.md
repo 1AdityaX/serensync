@@ -61,7 +61,7 @@ tests without a dependency-injection framework.
 ### Setup
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/1AdityaX/serensync.git
 cd serensync
 flutter pub get
 flutter run
@@ -89,21 +89,17 @@ Or, after first launch, press the Home button and choose SerenSync when prompted
 
 | Package | Version | Purpose |
 |---|---|---|
-| `apps_handler` | `^1.0.1` | Native plugin for listing, launching, and managing apps |
+| `apps_handler` | `^2.0.0` | Native plugin for listing, launching, and managing apps |
+| `android_intent_plus` | `^5.3.1` | Opens the default dialer and camera |
 | `intl` | `^0.20.2` | Clock time formatting |
 
 ---
 
 ## Home Screen Shortcuts
 
-The Phone and Camera shortcuts on the home screen use standard AOSP package names:
-
-```dart
-const _phonePackage  = 'com.android.dialer';
-const _cameraPackage = 'com.android.camera2';
-```
-
-These may differ on some manufacturer ROMs (Samsung, Xiaomi, etc.). Configurable shortcut selection is planned as part of the Settings feature.
+Phone uses Android's dial intent and Camera uses Android's still-image camera
+intent. Android resolves the correct installed app, so the shortcuts do not
+depend on manufacturer-specific package names.
 
 ---
 

@@ -79,7 +79,7 @@ class _MainScreenState extends State<MainScreen> {
           controller: _pageController,
           onPageChanged: (page) => _currentPage = page,
           children: <Widget>[
-            HomeScreen(appService: widget.appService),
+            const HomeScreen(),
             AppsScreen(appService: widget.appService),
           ],
         ),

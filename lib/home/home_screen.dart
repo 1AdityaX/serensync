@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 
-import '../apps/app_service.dart';
+import 'home_shortcuts.dart';
 import 'widgets/clock_widget.dart';
 
-// Standard AOSP package names. Adjust for device-specific variants via settings.
-const _phonePackage = 'com.android.dialer';
-const _cameraPackage = 'com.android.camera2';
-
 class HomeScreen extends StatelessWidget {
-  final AppService appService;
+  final VoidCallback onOpenDialer;
+  final VoidCallback onOpenCamera;
 
-  const HomeScreen({super.key, required this.appService});
+  const HomeScreen({
+    super.key,
+    this.onOpenDialer = openDialer,
+    this.onOpenCamera = openCamera,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +23,7 @@ class HomeScreen extends StatelessWidget {
           left: 16,
           child: IconButton(
             icon: const Icon(Icons.call),
-            onPressed: () => appService.openApp(_phonePackage),
+            onPressed: onOpenDialer,
             iconSize: 32,
           ),
         ),
@@ -31,7 +32,7 @@ class HomeScreen extends StatelessWidget {
           right: 16,
           child: IconButton(
             icon: const Icon(Icons.camera_alt),
-            onPressed: () => appService.openApp(_cameraPackage),
+            onPressed: onOpenCamera,
             iconSize: 32,
           ),
         ),

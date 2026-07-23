@@ -4,8 +4,11 @@ import 'package:apps_handler/apps_handler.dart';
 class AppService {
   List<AppInfo>? _cachedApps;
   Future<List<AppInfo>>? _appsLoad;
+  bool _refreshPending = false;
 
   Future<List<AppInfo>> getInstalledApps({bool forceRefresh = false}) {
+    if (forceRefresh) _refreshPending = true;
+
     final cachedApps = _cachedApps;
     if (!forceRefresh && cachedApps != null) {
       return Future.value(cachedApps);
@@ -19,13 +22,22 @@ class AppService {
       return activeLoad;
     }
 
-    final appsLoad = _loadInstalledApps();
+    final appsLoad = _loadUntilCurrent();
     _appsLoad = appsLoad;
     return appsLoad.whenComplete(() {
       if (identical(_appsLoad, appsLoad)) {
         _appsLoad = null;
       }
     });
+  }
+
+  Future<List<AppInfo>> _loadUntilCurrent() async {
+    List<AppInfo> apps;
+    do {
+      _refreshPending = false;
+      apps = await _loadInstalledApps();
+    } while (_refreshPending);
+    return apps;
   }
 
   Future<List<AppInfo>> _loadInstalledApps() async {
@@ -37,8 +49,8 @@ class AppService {
     return _cachedApps = List.unmodifiable(apps);
   }
 
-  Future<void> openApp(String packageName) async {
-    await AppsHandler.openApp(packageName);
+  Future<void> openApp(AppInfo app) async {
+    await AppsHandler.openApp(app);
   }
 
   Future<void> openAppSettings(String packageName) async {

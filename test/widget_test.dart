@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:apps_handler/apps_handler.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serensync/apps/app_service.dart';
 import 'package:serensync/apps/apps_screen.dart';
+import 'package:serensync/home/home_screen.dart';
 import 'package:serensync/main.dart';
 
 void main() {
@@ -12,8 +14,8 @@ void main() {
 
   setUp(() {
     appService = FakeAppService([
-      _app('Alpha', 'com.example.alpha'),
-      _app('Beta', 'com.example.beta'),
+      _app('Alpha', 'com.example.alpha', 'com.example.alpha.MainActivity'),
+      _app('Beta', 'com.example.beta', 'com.example.beta.MainActivity'),
     ]);
   });
 
@@ -42,6 +44,7 @@ void main() {
     await tester.pump();
 
     expect(appService.openedPackages, ['com.example.beta']);
+    expect(appService.openedActivities, ['com.example.beta.MainActivity']);
     expect(
       tester.widget<TextField>(find.byType(TextField)).controller?.text,
       '',
@@ -55,12 +58,45 @@ void main() {
     await tester.pumpWidget(TestApp(child: AppsScreen(appService: appService)));
     await tester.pump();
 
-    appService.apps = [...appService.apps, _app('Gamma', 'com.example.gamma')];
+    appService.apps = [
+      ...appService.apps,
+      _app('Gamma', 'com.example.gamma', 'com.example.gamma.MainActivity'),
+    ];
     appService.notifyAppsChanged();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('Gamma'), findsOneWidget);
     expect(appService.forceRefreshes, 1);
+
+    appService.apps = appService.apps
+        .where((app) => app.packageName != 'com.example.beta')
+        .toList();
+    appService.notifyAppsChanged();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Beta'), findsNothing);
+    expect(appService.forceRefreshes, 2);
+  });
+
+  testWidgets('home shortcuts use the default phone and camera apps', (
+    WidgetTester tester,
+  ) async {
+    var dialerLaunches = 0;
+    var cameraLaunches = 0;
+    await tester.pumpWidget(
+      TestApp(
+        child: HomeScreen(
+          onOpenDialer: () async => dialerLaunches++,
+          onOpenCamera: () async => cameraLaunches++,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.call));
+    await tester.tap(find.byIcon(Icons.camera_alt));
+
+    expect(dialerLaunches, 1);
+    expect(cameraLaunches, 1);
   });
 
   testWidgets('leaving and reopening app drawer does not reload apps', (
@@ -99,6 +135,44 @@ void main() {
     expect(find.text('Alpha'), findsNothing);
     expect(appService.appListLoads, 1);
   });
+
+  test('queues a refresh while an app scan is running', () async {
+    const channel = MethodChannel('apps_handler');
+    final firstScan = Completer<Object?>();
+    var scans = 0;
+
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) {
+          scans++;
+          if (scans == 1) return firstScan.future;
+          return Future.value([
+            _app(
+              'Fresh',
+              'com.example.fresh',
+              'com.example.fresh.MainActivity',
+            ).toMap(),
+          ]);
+        });
+
+    final service = AppService();
+    final initial = service.getInstalledApps();
+    final refreshed = service.getInstalledApps(forceRefresh: true);
+    firstScan.complete([
+      _app(
+        'Stale',
+        'com.example.stale',
+        'com.example.stale.MainActivity',
+      ).toMap(),
+    ]);
+
+    expect((await initial).single.appName, 'Fresh');
+    expect((await refreshed).single.appName, 'Fresh');
+    expect(scans, 2);
+  });
 }
 
 class TestApp extends StatelessWidget {
@@ -113,6 +187,7 @@ class TestApp extends StatelessWidget {
 class FakeAppService extends AppService {
   final StreamController<AppEvent> _changes = StreamController.broadcast();
   final List<String> openedPackages = [];
+  final List<String?> openedActivities = [];
   int appListLoads = 0;
   int forceRefreshes = 0;
   List<AppInfo> apps;
@@ -127,8 +202,9 @@ class FakeAppService extends AppService {
   }
 
   @override
-  Future<void> openApp(String packageName) async {
-    openedPackages.add(packageName);
+  Future<void> openApp(AppInfo app) async {
+    openedPackages.add(app.packageName);
+    openedActivities.add(app.activityName);
   }
 
   @override
@@ -146,10 +222,11 @@ class FakeAppService extends AppService {
   void dispose() => _changes.close();
 }
 
-AppInfo _app(String name, String packageName) {
+AppInfo _app(String name, String packageName, String activityName) {
   return AppInfo(
     appName: name,
     packageName: packageName,
+    activityName: activityName,
     category: '',
     versionName: null,
     versionCode: 1,
