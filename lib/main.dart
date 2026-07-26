@@ -2,10 +2,17 @@ import 'package:flutter/material.dart';
 
 import 'apps/app_service.dart';
 import 'apps/apps_screen.dart';
+import 'blocking/block_overlay.dart';
 import 'home/home_screen.dart';
 
 void main() {
   runApp(MyApp());
+}
+
+@pragma('vm:entry-point')
+void overlayMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const BlockOverlayApp());
 }
 
 class MyApp extends StatelessWidget {
