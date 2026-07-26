@@ -7,7 +7,6 @@ class SettingsScreen extends StatelessWidget {
     'Monochrome Mode',
     'Hidden Apps',
     'Renamed Apps',
-    'Locked Apps',
     'Apps Timer',
     'Notification Filter',
     'Apps Usage',
