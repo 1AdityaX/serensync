@@ -136,6 +136,20 @@ void main() {
     expect(appService.appListLoads, 1);
   });
 
+  testWidgets('back on home is absorbed without rebuilding the launcher', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(MyApp(appService: appService));
+    await tester.pumpAndSettle();
+    final homeElement = tester.element(find.byType(HomeScreen));
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(tester.element(find.byType(HomeScreen)), same(homeElement));
+    expect(appService.appListLoads, 0);
+  });
+
   test('queues a refresh while an app scan is running', () async {
     const channel = MethodChannel('apps_handler');
     final firstScan = Completer<Object?>();
