@@ -53,11 +53,6 @@ class AppOptionsDialog extends StatelessWidget {
               leading: const Icon(Icons.visibility_off_outlined),
               onTap: () => Navigator.of(context).pop(),
             ),
-            ListTile(
-              title: const Text('Lock App'),
-              leading: const Icon(Icons.lock_outline),
-              onTap: () => Navigator.of(context).pop(),
-            ),
           ],
         ),
       ),
