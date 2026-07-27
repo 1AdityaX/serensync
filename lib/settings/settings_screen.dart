@@ -3,8 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../apps/app_service.dart';
+import '../blocking/blocking_engine.dart';
 import '../blocking/rule_store.dart';
 import '../blocking/rules_screen.dart';
+import '../onboarding/permission_flow.dart';
+import '../onboarding/permission_status.dart';
 
 class SettingsScreen extends StatefulWidget {
   final AppService appService;
@@ -22,15 +25,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     'Monochrome Mode',
     'Hidden Apps',
     'Renamed Apps',
+    'App blocking',
     'Blocking rules',
     'Notification Filter',
     'Apps Usage',
   ];
 
   void _openSetting(BuildContext context, String title) {
-    final screen = title == 'Blocking rules'
-        ? RulesScreen(ruleStore: _ruleStore, appService: widget.appService)
-        : _PlaceholderSettingsScreen(title: title);
+    final screen = switch (title) {
+      'App blocking' => PermissionFlow(
+        permissionStatus: PermissionStatus(),
+        ruleStore: _ruleStore,
+        blockingService: BlockingService(),
+      ),
+      'Blocking rules' => RulesScreen(
+        ruleStore: _ruleStore,
+        appService: widget.appService,
+      ),
+      _ => _PlaceholderSettingsScreen(title: title),
+    };
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
   }
 
