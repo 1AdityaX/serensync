@@ -1,16 +1,38 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
-class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key});
+import '../apps/app_service.dart';
+import '../blocking/rule_store.dart';
+import '../blocking/rules_screen.dart';
+
+class SettingsScreen extends StatefulWidget {
+  final AppService appService;
+
+  const SettingsScreen({super.key, required this.appService});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  final RuleStore _ruleStore = RuleStore();
 
   static const _settingsTitles = <String>[
     'Monochrome Mode',
     'Hidden Apps',
     'Renamed Apps',
-    'Apps Timer',
+    'Blocking rules',
     'Notification Filter',
     'Apps Usage',
   ];
+
+  void _openSetting(BuildContext context, String title) {
+    final screen = title == 'Blocking rules'
+        ? RulesScreen(ruleStore: _ruleStore, appService: widget.appService)
+        : _PlaceholderSettingsScreen(title: title);
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,16 +53,18 @@ class SettingsScreen extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: ListTile(
               title: Text(title),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => _PlaceholderSettingsScreen(title: title),
-                ),
-              ),
+              onTap: () => _openSetting(context, title),
             ),
           );
         },
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    unawaited(_ruleStore.close());
+    super.dispose();
   }
 }
 

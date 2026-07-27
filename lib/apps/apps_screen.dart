@@ -74,9 +74,11 @@ class _AppsScreenState extends State<AppsScreen>
   }
 
   void _openSettings() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const SettingsScreen()));
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SettingsScreen(appService: widget.appService),
+      ),
+    );
   }
 
   Future<void> _openApp(AppInfo app) async {
