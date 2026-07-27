@@ -7,35 +7,57 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'rule.dart';
 
 class BlockOverlay {
+  BlockOverlay({
+    Future<bool> Function()? isActive,
+    Future<void> Function(String ruleName)? showOverlay,
+    Future<void> Function(Map<String, String> data)? shareData,
+    Future<void> Function()? closeOverlay,
+    void Function()? launchApp,
+  }) : _isActive = isActive ?? FlutterOverlayWindow.isActive,
+       _showOverlay = showOverlay ?? _show,
+       _shareData = shareData ?? FlutterOverlayWindow.shareData,
+       _closeOverlay = closeOverlay ?? FlutterOverlayWindow.closeOverlay,
+       _launchApp = launchApp ?? FlutterForegroundTask.launchApp;
+
+  final Future<bool> Function() _isActive;
+  final Future<void> Function(String ruleName) _showOverlay;
+  final Future<void> Function(Map<String, String> data) _shareData;
+  final Future<void> Function() _closeOverlay;
+  final void Function() _launchApp;
+  String? _visiblePackage;
+  BlockRule? _visibleRule;
+
   Future<void> show({
     required String packageName,
     required BlockRule rule,
   }) async {
-    if (!await FlutterOverlayWindow.isActive()) {
-      await FlutterOverlayWindow.showOverlay(
-        height: WindowSize.matchParent,
-        width: WindowSize.matchParent,
-        flag: OverlayFlag.defaultFlag,
-        overlayTitle: 'SerenSync',
-        overlayContent: rule.name,
-      );
+    final active = await _isActive();
+    if (active &&
+        packageName == _visiblePackage &&
+        identical(rule, _visibleRule)) {
+      return;
+    }
+
+    if (!active) {
+      await _showOverlay(rule.name);
       if (!await _waitUntilActive()) {
-        FlutterForegroundTask.launchApp();
+        _launchApp();
         return;
       }
     }
-    await FlutterOverlayWindow.shareData(<String, String>{
+    await _shareData(<String, String>{
       'packageName': packageName,
       'ruleName': rule.name,
     });
-    FlutterForegroundTask.launchApp();
+    _visiblePackage = packageName;
+    _visibleRule = rule;
   }
 
   Future<bool> _waitUntilActive() async {
     // The plugin returns after requesting a service start, before its overlay
     // isolate is necessarily ready to receive the rule payload.
     for (var attempt = 0; attempt < 40; attempt++) {
-      if (await FlutterOverlayWindow.isActive()) {
+      if (await _isActive()) {
         return true;
       }
       await Future<void>.delayed(const Duration(milliseconds: 25));
@@ -44,9 +66,21 @@ class BlockOverlay {
   }
 
   Future<void> hide() async {
-    if (await FlutterOverlayWindow.isActive()) {
-      await FlutterOverlayWindow.closeOverlay();
+    _visiblePackage = null;
+    _visibleRule = null;
+    if (await _isActive()) {
+      await _closeOverlay();
     }
+  }
+
+  static Future<void> _show(String ruleName) {
+    return FlutterOverlayWindow.showOverlay(
+      height: WindowSize.matchParent,
+      width: WindowSize.matchParent,
+      flag: OverlayFlag.defaultFlag,
+      overlayTitle: 'SerenSync',
+      overlayContent: ruleName,
+    );
   }
 }
 
