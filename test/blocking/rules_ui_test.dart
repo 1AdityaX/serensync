@@ -37,61 +37,6 @@ void main() {
         .setMockMethodCallHandler(taskChannel, null);
   });
 
-  test('formats weekday selections readably', () {
-    expect(weekdaySummary({DateTime.wednesday}), 'Wed');
-    expect(
-      weekdaySummary({
-        DateTime.monday,
-        DateTime.tuesday,
-        DateTime.wednesday,
-        DateTime.thursday,
-        DateTime.friday,
-      }),
-      'Mon-Fri',
-    );
-    expect(
-      weekdaySummary({
-        DateTime.monday,
-        DateTime.wednesday,
-        DateTime.friday,
-        DateTime.sunday,
-      }),
-      'Mon, Wed, Fri, Sun',
-    );
-    expect(
-      weekdaySummary({
-        DateTime.monday,
-        DateTime.tuesday,
-        DateTime.wednesday,
-        DateTime.thursday,
-        DateTime.friday,
-        DateTime.saturday,
-        DateTime.sunday,
-      }),
-      'Mon-Sun',
-    );
-  });
-
-  test('formats every rule trigger readably', () {
-    expect(ruleTime(6 * 60 + 5), '06:05');
-    expect(ruleDuration(const Duration(minutes: 90)), '1h 30m');
-    expect(
-      triggerSummary(
-        const Schedule(
-          weekdays: {DateTime.monday, DateTime.tuesday, DateTime.wednesday},
-          startMinute: 22 * 60,
-          endMinute: 6 * 60,
-        ),
-      ),
-      'Mon-Wed 22:00-06:00',
-    );
-    expect(
-      triggerSummary(const UsageQuota(Duration(minutes: 30))),
-      '30m per day',
-    );
-    expect(triggerSummary(const LaunchQuota(5)), '5 launches per day');
-  });
-
   testWidgets('schedule editor saves the entered rule', (tester) async {
     await _pumpEditor(tester, ruleStore, appService);
     await _nameAndSelectAlpha(tester);
@@ -134,6 +79,17 @@ void main() {
     expect(rulesChangedSignals, 1);
   });
 
+  testWidgets('limit picker shows the three limit types', (tester) async {
+    await _pumpEditor(tester, ruleStore, appService);
+
+    await tester.tap(find.byKey(const ValueKey('trigger-type')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hours'), findsWidgets);
+    expect(find.text('Daily time'), findsOneWidget);
+    expect(find.text('Daily opens'), findsOneWidget);
+  });
+
   testWidgets('usage quota editor preserves selection while filtering', (
     tester,
   ) async {
@@ -144,16 +100,14 @@ void main() {
     );
     await _chooseDropdown(tester, 'trigger-type', 'usage');
     await tester.enterText(find.byKey(const ValueKey('usage-minutes')), '45');
-    await tester.tap(find.byKey(const ValueKey('app-com.example.alpha')));
-    await tester.pump();
+    await _tapApp(tester, 'com.example.alpha');
     await tester.enterText(
       find.byKey(const ValueKey('app-picker-search')),
       'bet',
     );
     await tester.pump();
-    expect(find.text('Alpha'), findsNothing);
-    await tester.tap(find.byKey(const ValueKey('app-com.example.beta')));
-    await tester.pump();
+    expect(find.byKey(const ValueKey('app-com.example.alpha')), findsNothing);
+    await _tapApp(tester, 'com.example.beta');
     await tester.tap(find.byKey(const ValueKey('rule-save')));
     await tester.pumpAndSettle();
 
@@ -179,20 +133,48 @@ void main() {
     expect(rulesChangedSignals, 1);
   });
 
-  testWidgets('save needs both a name and an app', (tester) async {
+  testWidgets('save needs at least one app', (tester) async {
     await _pumpEditor(tester, ruleStore, appService);
     TextButton save() => tester.widget(find.byKey(const ValueKey('rule-save')));
 
     expect(save().onPressed, isNull);
-    await tester.enterText(find.byKey(const ValueKey('rule-name')), 'Focus');
-    await tester.pump();
-    expect(save().onPressed, isNull);
-    await tester.tap(find.byKey(const ValueKey('app-com.example.alpha')));
-    await tester.pump();
+    await _tapApp(tester, 'com.example.alpha');
     expect(save().onPressed, isNotNull);
-    await tester.enterText(find.byKey(const ValueKey('rule-name')), '');
-    await tester.pump();
+    await _tapApp(tester, 'com.example.alpha');
     expect(save().onPressed, isNull);
+  });
+
+  testWidgets('blank name saves the selected app name', (tester) async {
+    await _pumpEditor(tester, ruleStore, appService);
+    await _tapApp(tester, 'com.example.alpha');
+    await tester.tap(find.byKey(const ValueKey('rule-save')));
+    await tester.pumpAndSettle();
+
+    expect(ruleStore.rules.single.name, 'Alpha');
+  });
+
+  testWidgets('blank name saves two selected app names', (tester) async {
+    await _pumpEditor(tester, ruleStore, appService);
+    await _tapApp(tester, 'com.example.alpha');
+    await _tapApp(tester, 'com.example.beta');
+    await tester.tap(find.byKey(const ValueKey('rule-save')));
+    await tester.pumpAndSettle();
+
+    expect(ruleStore.rules.single.name, 'Alpha, Beta');
+  });
+
+  testWidgets('blank name abbreviates three or more selected apps', (
+    tester,
+  ) async {
+    appService.apps.add(_app('Gamma', 'com.example.gamma'));
+    await _pumpEditor(tester, ruleStore, appService);
+    await _tapApp(tester, 'com.example.alpha');
+    await _tapApp(tester, 'com.example.beta');
+    await _tapApp(tester, 'com.example.gamma');
+    await tester.tap(find.byKey(const ValueKey('rule-save')));
+    await tester.pumpAndSettle();
+
+    expect(ruleStore.rules.single.name, 'Alpha, Beta + 1 more');
   });
 
   testWidgets('rule toggle persists the enabled state', (tester) async {
@@ -215,10 +197,7 @@ void main() {
 
     expect(ruleStore.rules, isEmpty);
     expect(find.text('Temporary'), findsNothing);
-    expect(
-      find.text('Rules block selected apps on a schedule or daily limit.'),
-      findsOneWidget,
-    );
+    expect(find.text('No limits yet'), findsOneWidget);
     expect(rulesChangedSignals, 1);
   });
 
@@ -334,7 +313,14 @@ Future<void> _nameAndSelectAlpha(
   String name = 'Morning focus',
 }) async {
   await tester.enterText(find.byKey(const ValueKey('rule-name')), name);
-  await tester.tap(find.byKey(const ValueKey('app-com.example.alpha')));
+  await _tapApp(tester, 'com.example.alpha');
+}
+
+Future<void> _tapApp(WidgetTester tester, String package) async {
+  final app = find.byKey(ValueKey('app-$package'));
+  await tester.ensureVisible(app);
+  await tester.pumpAndSettle();
+  await tester.tap(app);
   await tester.pump();
 }
 

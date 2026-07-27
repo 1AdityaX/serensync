@@ -55,7 +55,7 @@ class TriggerEditor extends StatelessWidget {
       iconEnabledColor: Colors.white70,
       focusColor: Colors.transparent,
       decoration: const InputDecoration(
-        labelText: 'Trigger',
+        labelText: 'Limit',
         labelStyle: TextStyle(color: Colors.white70),
         floatingLabelStyle: TextStyle(color: Colors.white),
         enabledBorder: UnderlineInputBorder(
@@ -69,17 +69,17 @@ class TriggerEditor extends StatelessWidget {
         DropdownMenuItem(
           key: ValueKey('trigger-type-schedule'),
           value: 'schedule',
-          child: Text('Schedule'),
+          child: Text('Hours'),
         ),
         DropdownMenuItem(
           key: ValueKey('trigger-type-usage'),
           value: 'usage',
-          child: Text('Usage quota'),
+          child: Text('Daily time'),
         ),
         DropdownMenuItem(
           key: ValueKey('trigger-type-launch'),
           value: 'launch',
-          child: Text('Launch quota'),
+          child: Text('Daily opens'),
         ),
       ],
       onChanged: _changeType,
@@ -96,7 +96,10 @@ class TriggerEditor extends StatelessWidget {
         key: const ValueKey('usage-minutes'),
         initialValue: '${quota.limit.inMinutes}',
         cursorColor: Colors.white,
-        decoration: _numberDecoration('Minutes per day', suffix: 'min'),
+        decoration: _numberDecoration(
+          'Blocked after',
+          suffix: 'minutes of use today',
+        ),
         keyboardType: TextInputType.number,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
         onChanged: (value) {
@@ -110,7 +113,7 @@ class TriggerEditor extends StatelessWidget {
         key: const ValueKey('launch-count'),
         initialValue: '${quota.limit}',
         cursorColor: Colors.white,
-        decoration: _numberDecoration('Launches per day'),
+        decoration: _numberDecoration('Blocked after', suffix: 'opens today'),
         keyboardType: TextInputType.number,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
         onChanged: (value) {
@@ -171,7 +174,7 @@ class _ScheduleEditor extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Weekdays'),
+        const Text('Blocked on'),
         const SizedBox(height: 8),
         _weekdayPicker(),
         const SizedBox(height: 12),
@@ -188,7 +191,7 @@ class _ScheduleEditor extends StatelessWidget {
   }
 
   Widget _timeEditor({required bool start}) {
-    final name = start ? 'Start' : 'End';
+    final name = start ? 'From' : 'Until';
     final keyPrefix = start ? 'schedule-start' : 'schedule-end';
     final minute = start ? schedule.startMinute : schedule.endMinute;
     final hour = minute ~/ 60;

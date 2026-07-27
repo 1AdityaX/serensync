@@ -102,8 +102,8 @@ void initializeBlockingService() {
   FlutterForegroundTask.init(
     androidNotificationOptions: AndroidNotificationOptions(
       channelId: 'blocking_engine',
-      channelName: 'App blocking',
-      channelDescription: 'Keeps SerenSync app blocking active',
+      channelName: 'App limits',
+      channelDescription: 'Shown while app limits are being enforced.',
       onlyAlertOnce: true,
     ),
     iosNotificationOptions: const IOSNotificationOptions(
@@ -122,8 +122,8 @@ class BlockingService {
       serviceTypes: const <ForegroundServiceTypes>[
         ForegroundServiceTypes.specialUse,
       ],
-      notificationTitle: 'SerenSync is active',
-      notificationText: 'App blocking is running',
+      notificationTitle: 'App limits are on',
+      notificationText: 'Blocking runs while this is showing.',
       callback: blockingEngineCallback,
     );
   }

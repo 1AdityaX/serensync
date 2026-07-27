@@ -5,6 +5,61 @@ const _packageName = 'com.example.focus';
 const _noUsage = AppUsage(foregroundTime: Duration.zero, launches: 0);
 
 void main() {
+  test('formats weekday selections readably', () {
+    expect(weekdaySummary({DateTime.wednesday}), 'Wed');
+    expect(
+      weekdaySummary({
+        DateTime.monday,
+        DateTime.tuesday,
+        DateTime.wednesday,
+        DateTime.thursday,
+        DateTime.friday,
+      }),
+      'Mon–Fri',
+    );
+    expect(
+      weekdaySummary({
+        DateTime.monday,
+        DateTime.wednesday,
+        DateTime.friday,
+        DateTime.sunday,
+      }),
+      'Mon, Wed, Fri, Sun',
+    );
+    expect(
+      weekdaySummary({
+        DateTime.monday,
+        DateTime.tuesday,
+        DateTime.wednesday,
+        DateTime.thursday,
+        DateTime.friday,
+        DateTime.saturday,
+        DateTime.sunday,
+      }),
+      'Mon–Sun',
+    );
+  });
+
+  test('formats every limit summary readably', () {
+    expect(ruleTime(6 * 60 + 5), '06:05');
+    expect(ruleDuration(const Duration(minutes: 90)), '1h 30m');
+    expect(
+      triggerSummary(
+        const Schedule(
+          weekdays: {DateTime.monday, DateTime.tuesday, DateTime.wednesday},
+          startMinute: 22 * 60,
+          endMinute: 6 * 60,
+        ),
+      ),
+      'Blocked Mon–Wed 22:00–06:00',
+    );
+    expect(
+      triggerSummary(const UsageQuota(Duration(minutes: 30))),
+      'Blocked after 30m a day',
+    );
+    expect(triggerSummary(const LaunchQuota(5)), 'Blocked after 5 opens a day');
+  });
+
   group('schedule', () {
     test('uses an inclusive start and exclusive end', () {
       const rule = BlockRule(
