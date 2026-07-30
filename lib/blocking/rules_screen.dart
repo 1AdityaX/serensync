@@ -89,11 +89,11 @@ class _RulesScreenState extends State<RulesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Blocking rules'),
+        title: const Text('App limits'),
         actions: [
           IconButton(
             key: const ValueKey('add-rule'),
-            tooltip: 'New rule',
+            tooltip: 'New limit',
             icon: const Icon(Icons.add),
             onPressed: _openEditor,
           ),
@@ -106,10 +106,17 @@ class _RulesScreenState extends State<RulesScreen> {
   Widget _buildBody() {
     if (_loadError != null && _rules == null) {
       return Center(
-        child: TextButton(
-          style: TextButton.styleFrom(foregroundColor: Colors.white),
-          onPressed: _loadRules,
-          child: const Text('Retry'),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Could not load your limits.'),
+            const SizedBox(height: 8),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              onPressed: _loadRules,
+              child: const Text('Retry'),
+            ),
+          ],
         ),
       );
     }
@@ -120,8 +127,25 @@ class _RulesScreenState extends State<RulesScreen> {
       );
     }
     if (rules.isEmpty) {
-      return const Center(
-        child: Text('Rules block selected apps on a schedule or daily limit.'),
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('No limits yet'),
+            const SizedBox(height: 8),
+            const Text(
+              'Pick some apps and choose\nwhen to block them.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              onPressed: _openEditor,
+              child: const Text('Add a limit'),
+            ),
+          ],
+        ),
       );
     }
     return ListView.builder(
@@ -165,8 +189,8 @@ class _RuleTile extends StatelessWidget {
           IconButton(
             key: ValueKey('rule-enabled-${rule.id}'),
             tooltip: rule.enabled
-                ? 'Disable ${rule.name}'
-                : 'Enable ${rule.name}',
+                ? 'Pause ${rule.name}'
+                : 'Resume ${rule.name}',
             color: rule.enabled ? Colors.white : Colors.white70,
             icon: Icon(
               rule.enabled ? Icons.check_circle : Icons.radio_button_unchecked,
@@ -183,47 +207,4 @@ class _RuleTile extends StatelessWidget {
       ),
     );
   }
-}
-
-String triggerSummary(Trigger trigger) {
-  return switch (trigger) {
-    final Schedule schedule =>
-      '${weekdaySummary(schedule.weekdays)} '
-          '${ruleTime(schedule.startMinute)}-${ruleTime(schedule.endMinute)}',
-    final UsageQuota quota => '${ruleDuration(quota.limit)} per day',
-    final LaunchQuota quota => '${quota.limit} launches per day',
-  };
-}
-
-String weekdaySummary(Set<int> weekdays) {
-  const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  final sorted = weekdays.toList()..sort();
-  final parts = <String>[];
-  var index = 0;
-  while (index < sorted.length) {
-    final start = sorted[index];
-    var end = start;
-    while (index + 1 < sorted.length && sorted[index + 1] == end + 1) {
-      end = sorted[++index];
-    }
-    parts.add(
-      start == end ? names[start - 1] : '${names[start - 1]}-${names[end - 1]}',
-    );
-    index++;
-  }
-  return parts.isEmpty ? 'No days' : parts.join(', ');
-}
-
-String ruleTime(int minute) {
-  final hour = (minute ~/ 60).toString().padLeft(2, '0');
-  final minuteOfHour = (minute % 60).toString().padLeft(2, '0');
-  return '$hour:$minuteOfHour';
-}
-
-String ruleDuration(Duration duration) {
-  final hours = duration.inHours;
-  final minutes = duration.inMinutes.remainder(60);
-  if (hours == 0) return '${duration.inMinutes}m';
-  if (minutes == 0) return '${hours}h';
-  return '${hours}h ${minutes}m';
 }

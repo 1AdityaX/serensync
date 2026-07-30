@@ -88,6 +88,50 @@ Decision decide({
   return const Allow();
 }
 
+String triggerSummary(Trigger trigger) {
+  return switch (trigger) {
+    final Schedule schedule =>
+      'Blocked ${weekdaySummary(schedule.weekdays)} '
+          '${ruleTime(schedule.startMinute)}–${ruleTime(schedule.endMinute)}',
+    final UsageQuota quota =>
+      'Blocked after ${ruleDuration(quota.limit)} a day',
+    final LaunchQuota quota => 'Blocked after ${quota.limit} opens a day',
+  };
+}
+
+String weekdaySummary(Set<int> weekdays) {
+  const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  final sorted = weekdays.toList()..sort();
+  final parts = <String>[];
+  var index = 0;
+  while (index < sorted.length) {
+    final start = sorted[index];
+    var end = start;
+    while (index + 1 < sorted.length && sorted[index + 1] == end + 1) {
+      end = sorted[++index];
+    }
+    parts.add(
+      start == end ? names[start - 1] : '${names[start - 1]}–${names[end - 1]}',
+    );
+    index++;
+  }
+  return parts.isEmpty ? 'No days' : parts.join(', ');
+}
+
+String ruleTime(int minute) {
+  final hour = (minute ~/ 60).toString().padLeft(2, '0');
+  final minuteOfHour = (minute % 60).toString().padLeft(2, '0');
+  return '$hour:$minuteOfHour';
+}
+
+String ruleDuration(Duration duration) {
+  final hours = duration.inHours;
+  final minutes = duration.inMinutes.remainder(60);
+  if (hours == 0) return '${duration.inMinutes}m';
+  if (minutes == 0) return '${hours}h';
+  return '${hours}h ${minutes}m';
+}
+
 bool _scheduleBlocks(Schedule schedule, DateTime now) {
   if (schedule.startMinute == schedule.endMinute) {
     return false;

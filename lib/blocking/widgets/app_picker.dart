@@ -1,16 +1,14 @@
 import 'package:apps_handler/apps_handler.dart';
 import 'package:flutter/material.dart';
 
-import '../../apps/app_service.dart';
-
 class AppPicker extends StatefulWidget {
-  final AppService appService;
+  final List<AppInfo> apps;
   final Set<String> selectedPackages;
   final ValueChanged<Set<String>> onChanged;
 
   const AppPicker({
     super.key,
-    required this.appService,
+    required this.apps,
     required this.selectedPackages,
     required this.onChanged,
   });
@@ -20,18 +18,7 @@ class AppPicker extends StatefulWidget {
 }
 
 class _AppPickerState extends State<AppPicker> {
-  late Future<List<AppInfo>> _appsLoad;
   String _query = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _appsLoad = widget.appService.getInstalledApps();
-  }
-
-  void _retry() {
-    setState(() => _appsLoad = widget.appService.getInstalledApps());
-  }
 
   void _toggle(String package, bool selected) {
     final packages = Set<String>.of(widget.selectedPackages);
@@ -49,16 +36,17 @@ class _AppPickerState extends State<AppPicker> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('$count ${count == 1 ? 'app' : 'apps'} selected'),
+        Row(
+          children: [
+            const Text('Apps'),
+            const Spacer(),
+            Text(count == 0 ? 'None selected' : '$count selected'),
+          ],
+        ),
         const SizedBox(height: 8),
         _searchField(),
         const SizedBox(height: 8),
-        Expanded(
-          child: FutureBuilder<List<AppInfo>>(
-            future: _appsLoad,
-            builder: (context, snapshot) => _buildList(snapshot),
-          ),
-        ),
+        Expanded(child: _buildList()),
       ],
     );
   }
@@ -92,32 +80,16 @@ class _AppPickerState extends State<AppPicker> {
     );
   }
 
-  Widget _buildList(AsyncSnapshot<List<AppInfo>> snapshot) {
-    if (snapshot.hasError) {
-      return Center(
-        child: TextButton(
-          style: TextButton.styleFrom(foregroundColor: Colors.white),
-          onPressed: _retry,
-          child: const Text('Retry'),
-        ),
-      );
-    }
-    final installedApps = snapshot.data;
-    if (installedApps == null) {
-      return const Center(
-        child: CircularProgressIndicator(color: Colors.white),
-      );
-    }
-
+  Widget _buildList() {
     final query = _query.trim().toLowerCase();
     final apps = query.isEmpty
-        ? installedApps
+        ? widget.apps
         : [
-            for (final app in installedApps)
+            for (final app in widget.apps)
               if (app.appName.toLowerCase().contains(query)) app,
           ];
     if (apps.isEmpty) {
-      return const Center(child: Text('No apps found'));
+      return const Center(child: Text('No apps match that search.'));
     }
     return ListView.builder(
       itemCount: apps.length,
