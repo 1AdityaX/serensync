@@ -1,8 +1,9 @@
-import 'package:apps_handler/apps_handler.dart';
 import 'package:flutter/material.dart';
 
+import '../../apps/installed_app.dart';
+
 class AppPicker extends StatefulWidget {
-  final List<AppInfo> apps;
+  final List<InstalledApp> apps;
   final Set<String> selectedPackages;
   final ValueChanged<Set<String>> onChanged;
 
@@ -86,7 +87,7 @@ class _AppPickerState extends State<AppPicker> {
         ? widget.apps
         : [
             for (final app in widget.apps)
-              if (app.appName.toLowerCase().contains(query)) app,
+              if (app.displayName.toLowerCase().contains(query)) app,
           ];
     if (apps.isEmpty) {
       return const Center(child: Text('No apps match that search.'));
@@ -97,12 +98,12 @@ class _AppPickerState extends State<AppPicker> {
     );
   }
 
-  Widget _appTile(AppInfo app) {
+  Widget _appTile(InstalledApp app) {
     final selected = widget.selectedPackages.contains(app.packageName);
     return ListTile(
       key: ValueKey('app-${app.packageName}'),
       contentPadding: EdgeInsets.zero,
-      title: Text(app.appName),
+      title: Text(app.displayName),
       trailing: selected ? const Icon(Icons.check, color: Colors.white) : null,
       onTap: () => _toggle(app.packageName, !selected),
     );

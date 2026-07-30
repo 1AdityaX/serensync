@@ -1,10 +1,10 @@
-import 'package:apps_handler/apps_handler.dart';
 import 'package:flutter/material.dart';
 
 import '../app_service.dart';
+import '../installed_app.dart';
 
 class AppOptionsDialog extends StatelessWidget {
-  final AppInfo app;
+  final InstalledApp app;
   final AppService appService;
 
   const AppOptionsDialog({
@@ -30,7 +30,7 @@ class AppOptionsDialog extends StatelessWidget {
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.white),
               ),
-              child: ListTile(title: Center(child: Text(app.appName))),
+              child: ListTile(title: Center(child: Text(app.displayName))),
             ),
             ListTile(
               title: const Text('Settings'),

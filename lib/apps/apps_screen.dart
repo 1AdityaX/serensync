@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../settings/settings_screen.dart';
 import 'app_service.dart';
+import 'installed_app.dart';
 import 'widgets/app_options_dialog.dart';
 import 'widgets/app_search_bar.dart';
 
@@ -20,15 +21,16 @@ class AppsScreen extends StatefulWidget {
 class _AppsScreenState extends State<AppsScreen>
     with AutomaticKeepAliveClientMixin {
   StreamSubscription<AppEvent>? _appChangesSubscription;
-  List<AppInfo>? _apps;
+  List<InstalledApp>? _apps;
   Object? _loadError;
+  bool _initialScanFinished = false;
   String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _subscribeToAppChanges();
-    _loadApps();
+    _loadInitialApps();
   }
 
   @override
@@ -38,7 +40,9 @@ class _AppsScreenState extends State<AppsScreen>
       _appChangesSubscription?.cancel();
       _subscribeToAppChanges();
       _apps = null;
-      _loadApps();
+      _loadError = null;
+      _initialScanFinished = false;
+      _loadInitialApps();
     }
   }
 
@@ -46,6 +50,18 @@ class _AppsScreenState extends State<AppsScreen>
     _appChangesSubscription = widget.appService.appChanges.listen(
       (_) => _loadApps(forceRefresh: true),
     );
+  }
+
+  Future<void> _loadInitialApps() async {
+    try {
+      final apps = await widget.appService.readPersistedApps();
+      if (!mounted) return;
+      setState(() => _apps = apps);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _loadError = error);
+    }
+    await _loadApps();
   }
 
   Future<void> _loadApps({bool forceRefresh = false}) async {
@@ -57,19 +73,23 @@ class _AppsScreenState extends State<AppsScreen>
       setState(() {
         _apps = apps;
         _loadError = null;
+        _initialScanFinished = true;
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _loadError = error);
+      setState(() {
+        _loadError = error;
+        _initialScanFinished = true;
+      });
     }
   }
 
-  List<AppInfo> get _filteredApps {
-    final apps = _apps ?? const <AppInfo>[];
+  List<InstalledApp> get _filteredApps {
+    final apps = _apps ?? const <InstalledApp>[];
     final query = _searchQuery.trim().toLowerCase();
     if (query.isEmpty) return apps;
     return apps
-        .where((app) => app.appName.toLowerCase().contains(query))
+        .where((app) => app.displayName.toLowerCase().contains(query))
         .toList();
   }
 
@@ -81,7 +101,7 @@ class _AppsScreenState extends State<AppsScreen>
     );
   }
 
-  Future<void> _openApp(AppInfo app) async {
+  Future<void> _openApp(InstalledApp app) async {
     setState(() => _searchQuery = '');
     await widget.appService.openApp(app);
   }
@@ -105,7 +125,12 @@ class _AppsScreenState extends State<AppsScreen>
   bool get wantKeepAlive => true;
 
   Widget _buildBody() {
-    if (_loadError != null && _apps == null) {
+    final appsAreEmpty = _apps?.isEmpty ?? true;
+    if (appsAreEmpty && !_initialScanFinished) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_loadError != null && appsAreEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -117,10 +142,6 @@ class _AppsScreenState extends State<AppsScreen>
       );
     }
 
-    if (_apps == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
     final apps = _filteredApps;
     return ListView.builder(
       padding: const EdgeInsets.only(left: 35),
@@ -129,7 +150,7 @@ class _AppsScreenState extends State<AppsScreen>
         final app = apps[index];
         return ListTile(
           contentPadding: EdgeInsets.zero,
-          title: Text(app.appName),
+          title: Text(app.displayName),
           onTap: () => _openApp(app),
           onLongPress: () => showDialog<void>(
             context: context,
