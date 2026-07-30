@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serensync/apps/app_service.dart';
+import 'package:serensync/apps/app_store.dart';
 import 'package:serensync/apps/apps_screen.dart';
+import 'package:serensync/apps/installed_app.dart';
 import 'package:serensync/home/home_screen.dart';
 import 'package:serensync/main.dart';
 
@@ -76,6 +78,22 @@ void main() {
 
     expect(find.text('Beta'), findsNothing);
     expect(appService.forceRefreshes, 2);
+  });
+
+  testWidgets('app drawer renders persisted apps while scan is running', (
+    WidgetTester tester,
+  ) async {
+    appService.persistedApps = [
+      _app('Cached', 'com.example.cached', 'com.example.cached.MainActivity'),
+    ];
+    appService.pendingLoad = Completer<List<InstalledApp>>();
+
+    await tester.pumpWidget(TestApp(child: AppsScreen(appService: appService)));
+    await tester.pump();
+
+    expect(find.text('Cached'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(appService.appListLoads, 1);
   });
 
   testWidgets('home shortcuts use the default phone and camera apps', (
@@ -164,7 +182,7 @@ void main() {
           scans++;
           if (scans == 1) return firstScan.future;
           return Future.value([
-            _app(
+            _pluginApp(
               'Fresh',
               'com.example.fresh',
               'com.example.fresh.MainActivity',
@@ -172,19 +190,19 @@ void main() {
           ]);
         });
 
-    final service = AppService();
+    final service = AppService(store: FakeAppStore());
     final initial = service.getInstalledApps();
     final refreshed = service.getInstalledApps(forceRefresh: true);
     firstScan.complete([
-      _app(
+      _pluginApp(
         'Stale',
         'com.example.stale',
         'com.example.stale.MainActivity',
       ).toMap(),
     ]);
 
-    expect((await initial).single.appName, 'Fresh');
-    expect((await refreshed).single.appName, 'Fresh');
+    expect((await initial).single.displayName, 'Fresh');
+    expect((await refreshed).single.displayName, 'Fresh');
     expect(scans, 2);
   });
 }
@@ -204,19 +222,24 @@ class FakeAppService extends AppService {
   final List<String?> openedActivities = [];
   int appListLoads = 0;
   int forceRefreshes = 0;
-  List<AppInfo> apps;
+  List<InstalledApp> apps;
+  List<InstalledApp> persistedApps = const [];
+  Completer<List<InstalledApp>>? pendingLoad;
 
-  FakeAppService(this.apps);
+  FakeAppService(this.apps) : super(store: FakeAppStore());
 
   @override
-  Future<List<AppInfo>> getInstalledApps({bool forceRefresh = false}) async {
+  Future<List<InstalledApp>> readPersistedApps() async => persistedApps;
+
+  @override
+  Future<List<InstalledApp>> getInstalledApps({bool forceRefresh = false}) {
     appListLoads++;
     if (forceRefresh) forceRefreshes++;
-    return apps;
+    return pendingLoad?.future ?? Future.value(apps);
   }
 
   @override
-  Future<void> openApp(AppInfo app) async {
+  Future<void> openApp(InstalledApp app) async {
     openedPackages.add(app.packageName);
     openedActivities.add(app.activityName);
   }
@@ -236,7 +259,23 @@ class FakeAppService extends AppService {
   void dispose() => _changes.close();
 }
 
-AppInfo _app(String name, String packageName, String activityName) {
+class FakeAppStore extends AppStore {
+  @override
+  Future<List<InstalledApp>> readAll() async => const [];
+
+  @override
+  Future<void> replaceAll(List<InstalledApp> apps) async {}
+}
+
+InstalledApp _app(String name, String packageName, String activityName) {
+  return InstalledApp(
+    displayName: name,
+    packageName: packageName,
+    activityName: activityName,
+  );
+}
+
+AppInfo _pluginApp(String name, String packageName, String activityName) {
   return AppInfo(
     appName: name,
     packageName: packageName,

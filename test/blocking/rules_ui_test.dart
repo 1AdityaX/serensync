@@ -1,8 +1,8 @@
-import 'package:apps_handler/apps_handler.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serensync/apps/app_service.dart';
+import 'package:serensync/apps/installed_app.dart';
 import 'package:serensync/blocking/blocking_engine.dart';
 import 'package:serensync/blocking/rule.dart';
 import 'package:serensync/blocking/rule_editor_screen.dart';
@@ -383,12 +383,17 @@ class FakeRuleStore extends RuleStore {
 }
 
 class FakeAppService extends AppService {
-  final List<AppInfo> apps;
+  final List<InstalledApp> apps;
 
   FakeAppService(this.apps);
 
   @override
-  Future<List<AppInfo>> getInstalledApps({bool forceRefresh = false}) async {
+  Future<List<InstalledApp>> readPersistedApps() async => apps;
+
+  @override
+  Future<List<InstalledApp>> getInstalledApps({
+    bool forceRefresh = false,
+  }) async {
     return apps;
   }
 }
@@ -407,19 +412,10 @@ BlockRule _rule({
   );
 }
 
-AppInfo _app(String name, String package) {
-  return AppInfo(
-    appName: name,
+InstalledApp _app(String name, String package) {
+  return InstalledApp(
+    displayName: name,
     packageName: package,
     activityName: '$package.MainActivity',
-    category: '',
-    versionName: null,
-    versionCode: 1,
-    dataDir: '',
-    systemApp: false,
-    installerPackageName: null,
-    enabled: true,
-    installTime: 0,
-    updateTime: 0,
   );
 }

@@ -1,7 +1,7 @@
-import 'package:apps_handler/apps_handler.dart';
 import 'package:flutter/material.dart';
 
 import '../apps/app_service.dart';
+import '../apps/installed_app.dart';
 import 'blocking_engine.dart';
 import 'rule.dart';
 import 'rule_store.dart';
@@ -28,8 +28,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
   late final TextEditingController _nameController;
   late Set<String> _packages;
   late Trigger _trigger;
-  late Future<List<AppInfo>> _appsLoad;
-  List<AppInfo> _installedApps = const <AppInfo>[];
+  late Future<List<InstalledApp>> _appsLoad;
+  List<InstalledApp> _installedApps = const <InstalledApp>[];
   bool _saving = false;
   bool _saveError = false;
 
@@ -48,7 +48,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
   String get _derivedName {
     final names = [
       for (final app in _installedApps)
-        if (_packages.contains(app.packageName)) app.appName,
+        if (_packages.contains(app.packageName)) app.displayName,
     ];
     if (names.length <= 2) return names.join(', ');
     return '${names.take(2).join(', ')} + ${names.length - 2} more';
@@ -167,7 +167,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
   }
 
   Widget _appPicker() {
-    return FutureBuilder<List<AppInfo>>(
+    return FutureBuilder<List<InstalledApp>>(
       future: _appsLoad,
       builder: (context, snapshot) {
         final apps = snapshot.data;
