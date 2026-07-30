@@ -57,6 +57,12 @@ class _AppsScreenState extends State<AppsScreen>
       final apps = await widget.appService.readPersistedApps();
       if (!mounted) return;
       setState(() => _apps = apps);
+      if (apps.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) unawaited(_loadApps());
+        });
+        return;
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() => _loadError = error);

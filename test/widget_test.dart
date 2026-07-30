@@ -96,6 +96,30 @@ void main() {
     expect(appService.appListLoads, 1);
   });
 
+  testWidgets('app drawer paints persisted apps before starting the scan', (
+    WidgetTester tester,
+  ) async {
+    final persistedLoad = Completer<List<InstalledApp>>();
+    appService.pendingPersistedLoad = persistedLoad;
+    await tester.pumpWidget(TestApp(child: AppsScreen(appService: appService)));
+
+    var cachedAppsRendered = false;
+    var scansWhenRendered = -1;
+    tester.binding.addPostFrameCallback((_) {
+      cachedAppsRendered = find.text('Cached').evaluate().isNotEmpty;
+      scansWhenRendered = appService.appListLoads;
+    });
+
+    persistedLoad.complete([
+      _app('Cached', 'com.example.cached', 'com.example.cached.MainActivity'),
+    ]);
+    await tester.pump();
+
+    expect(cachedAppsRendered, isTrue);
+    expect(scansWhenRendered, 0);
+    expect(appService.appListLoads, 1);
+  });
+
   testWidgets('home shortcuts use the default phone and camera apps', (
     WidgetTester tester,
   ) async {
@@ -225,11 +249,13 @@ class FakeAppService extends AppService {
   List<InstalledApp> apps;
   List<InstalledApp> persistedApps = const [];
   Completer<List<InstalledApp>>? pendingLoad;
+  Completer<List<InstalledApp>>? pendingPersistedLoad;
 
   FakeAppService(this.apps) : super(store: FakeAppStore());
 
   @override
-  Future<List<InstalledApp>> readPersistedApps() async => persistedApps;
+  Future<List<InstalledApp>> readPersistedApps() =>
+      pendingPersistedLoad?.future ?? Future.value(persistedApps);
 
   @override
   Future<List<InstalledApp>> getInstalledApps({bool forceRefresh = false}) {
