@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'apps/app_service.dart';
 import 'apps/apps_screen.dart';
 import 'blocking/block_overlay.dart';
+import 'blocking/blocking_engine.dart';
 import 'home/home_screen.dart';
 
 void main() {
+  initializeBlockingService();
   runApp(MyApp());
 }
 

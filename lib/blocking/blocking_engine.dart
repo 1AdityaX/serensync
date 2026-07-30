@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:usage_stats/usage_stats.dart';
 
 import 'block_overlay.dart';
 import 'foreground_app.dart';
@@ -8,9 +9,11 @@ import 'rule.dart';
 import 'rule_store.dart';
 
 const rulesChangedSignal = 'blocking.rulesChanged';
-const _ownPackage = 'com.example.serensync';
+const applicationId = 'com.example.serensync';
+const _ownPackage = applicationId;
 const _screenOnInterval = 1000;
 const _screenOffInterval = 60000;
+const _permissionCheckInterval = Duration(minutes: 1);
 
 class BlockingEngine {
   BlockingEngine({
@@ -111,15 +114,24 @@ void initializeBlockingService() {
   );
 }
 
-Future<ServiceRequestResult> startBlockingService() {
-  return FlutterForegroundTask.startService(
-    serviceTypes: const <ForegroundServiceTypes>[
-      ForegroundServiceTypes.specialUse,
-    ],
-    notificationTitle: 'SerenSync is active',
-    notificationText: 'App blocking is running',
-    callback: blockingEngineCallback,
-  );
+class BlockingService {
+  Future<bool> get isRunning => FlutterForegroundTask.isRunningService;
+
+  Future<ServiceRequestResult> start() {
+    return FlutterForegroundTask.startService(
+      serviceTypes: const <ForegroundServiceTypes>[
+        ForegroundServiceTypes.specialUse,
+      ],
+      notificationTitle: 'SerenSync is active',
+      notificationText: 'App blocking is running',
+      callback: blockingEngineCallback,
+    );
+  }
+
+  Future<bool> stop() async {
+    final result = await FlutterForegroundTask.stopService();
+    return result is ServiceRequestSuccess;
+  }
 }
 
 void signalRulesChanged() {
@@ -134,10 +146,15 @@ class BlockingTask extends TaskHandler {
   final BlockingEngine _engine;
   final RuleStore _ruleStore;
   bool _tickActive = false;
+  Timer? _permissionCheck;
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     await _reloadRules();
+    if (!await _checkEnforcementPermissions()) return;
+    _permissionCheck = Timer.periodic(_permissionCheckInterval, (_) {
+      unawaited(_checkEnforcementPermissions());
+    });
   }
 
   @override
@@ -156,8 +173,19 @@ class BlockingTask extends TaskHandler {
 
   @override
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
+    _permissionCheck?.cancel();
     await _engine.overlay.hide();
     await _ruleStore.close();
+  }
+
+  Future<bool> _checkEnforcementPermissions() async {
+    final usageAccess = await UsageStats.checkUsagePermission() ?? false;
+    final overlay = await FlutterForegroundTask.canDrawOverlays;
+    if (usageAccess && overlay) return true;
+
+    await _engine.overlay.hide();
+    await FlutterForegroundTask.stopService();
+    return false;
   }
 
   Future<void> _runTick(DateTime timestamp) async {

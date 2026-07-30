@@ -36,6 +36,95 @@ void main() {
     expect(overlay.ruleName, 'One launch');
   });
 
+  test('showing an overlay does not launch the app', () async {
+    var active = false;
+    var launches = 0;
+    final overlay = BlockOverlay(
+      isActive: () async => active,
+      showOverlay: (String _) async {
+        active = true;
+      },
+      shareData: (Map<String, String> _) async {},
+      launchApp: () {
+        launches++;
+      },
+    );
+
+    await overlay.show(packageName: blockedPackage, rule: blockingRule);
+
+    expect(launches, 0);
+  });
+
+  test('showing the same package and rule only shows once', () async {
+    var active = false;
+    var shows = 0;
+    var shares = 0;
+    final overlay = BlockOverlay(
+      isActive: () async => active,
+      showOverlay: (String _) async {
+        shows++;
+        active = true;
+      },
+      shareData: (Map<String, String> _) async {
+        shares++;
+      },
+    );
+
+    await overlay.show(packageName: blockedPackage, rule: blockingRule);
+    await overlay.show(packageName: blockedPackage, rule: blockingRule);
+
+    expect(shows, 1);
+    expect(shares, 1);
+  });
+
+  test('changing the blocked package or rule updates the overlay', () async {
+    var active = false;
+    final data = <Map<String, String>>[];
+    const otherRule = BlockRule(
+      id: 2,
+      name: 'Different rule',
+      packages: <String>{otherPackage},
+      trigger: LaunchQuota(1),
+      enabled: true,
+    );
+    final overlay = BlockOverlay(
+      isActive: () async => active,
+      showOverlay: (String _) async {
+        active = true;
+      },
+      shareData: (Map<String, String> value) async {
+        data.add(value);
+      },
+    );
+
+    await overlay.show(packageName: blockedPackage, rule: blockingRule);
+    await overlay.show(packageName: otherPackage, rule: blockingRule);
+    await overlay.show(packageName: otherPackage, rule: otherRule);
+
+    expect(data, <Map<String, String>>[
+      <String, String>{'packageName': blockedPackage, 'ruleName': 'One launch'},
+      <String, String>{'packageName': otherPackage, 'ruleName': 'One launch'},
+      <String, String>{
+        'packageName': otherPackage,
+        'ruleName': 'Different rule',
+      },
+    ]);
+  });
+
+  test('hiding an overlay closes it', () async {
+    var closes = 0;
+    final overlay = BlockOverlay(
+      isActive: () async => true,
+      closeOverlay: () async {
+        closes++;
+      },
+    );
+
+    await overlay.hide();
+
+    expect(closes, 1);
+  });
+
   test('an allowed package hides the overlay', () async {
     final foreground = FakeForegroundApp(
       packageName: blockedPackage,
