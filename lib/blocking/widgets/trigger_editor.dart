@@ -66,21 +66,9 @@ class TriggerEditor extends StatelessWidget {
         ),
       ),
       items: const [
-        DropdownMenuItem(
-          key: ValueKey('trigger-type-schedule'),
-          value: 'schedule',
-          child: Text('Hours'),
-        ),
-        DropdownMenuItem(
-          key: ValueKey('trigger-type-usage'),
-          value: 'usage',
-          child: Text('Daily time'),
-        ),
-        DropdownMenuItem(
-          key: ValueKey('trigger-type-launch'),
-          value: 'launch',
-          child: Text('Daily opens'),
-        ),
+        DropdownMenuItem(value: 'schedule', child: Text('Hours')),
+        DropdownMenuItem(value: 'usage', child: Text('Daily time')),
+        DropdownMenuItem(value: 'launch', child: Text('Daily opens')),
       ],
       onChanged: _changeType,
     );

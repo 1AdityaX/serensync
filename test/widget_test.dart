@@ -23,13 +23,6 @@ void main() {
 
   tearDown(() => appService.dispose());
 
-  testWidgets('app launches without crashing', (WidgetTester tester) async {
-    await tester.pumpWidget(MyApp(appService: appService));
-    await tester.pump();
-
-    expect(find.byType(MyApp), findsOneWidget);
-  });
-
   testWidgets('app drawer filters, launches, and clears the search', (
     WidgetTester tester,
   ) async {

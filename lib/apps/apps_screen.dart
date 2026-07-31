@@ -29,27 +29,10 @@ class _AppsScreenState extends State<AppsScreen>
   @override
   void initState() {
     super.initState();
-    _subscribeToAppChanges();
-    _loadInitialApps();
-  }
-
-  @override
-  void didUpdateWidget(AppsScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.appService != widget.appService) {
-      _appChangesSubscription?.cancel();
-      _subscribeToAppChanges();
-      _apps = null;
-      _loadError = null;
-      _initialScanFinished = false;
-      _loadInitialApps();
-    }
-  }
-
-  void _subscribeToAppChanges() {
     _appChangesSubscription = widget.appService.appChanges.listen(
       (_) => _loadApps(forceRefresh: true),
     );
+    _loadInitialApps();
   }
 
   Future<void> _loadInitialApps() async {

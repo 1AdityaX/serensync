@@ -98,7 +98,7 @@ void main() {
       find.byKey(const ValueKey('rule-name')),
       'Social time',
     );
-    await _chooseDropdown(tester, 'trigger-type', 'usage');
+    await _chooseTrigger(tester, 'Daily time');
     await tester.enterText(find.byKey(const ValueKey('usage-minutes')), '45');
     await _tapApp(tester, 'com.example.alpha');
     await tester.enterText(
@@ -121,7 +121,7 @@ void main() {
   testWidgets('launch quota editor saves the entered rule', (tester) async {
     await _pumpEditor(tester, ruleStore, appService);
     await _nameAndSelectAlpha(tester, name: 'Stop reopening');
-    await _chooseDropdown(tester, 'trigger-type', 'launch');
+    await _chooseTrigger(tester, 'Daily opens');
     await tester.enterText(find.byKey(const ValueKey('launch-count')), '7');
     await tester.tap(find.byKey(const ValueKey('rule-save')));
     await tester.pumpAndSettle();
@@ -324,16 +324,10 @@ Future<void> _tapApp(WidgetTester tester, String package) async {
   await tester.pump();
 }
 
-Future<void> _chooseDropdown(
-  WidgetTester tester,
-  String key,
-  String value,
-) async {
-  final control = find.byKey(ValueKey(key));
-  await tester.tap(control);
+Future<void> _chooseTrigger(WidgetTester tester, String label) async {
+  await tester.tap(find.byKey(const ValueKey('trigger-type')));
   await tester.pumpAndSettle();
-  final option = find.byKey(ValueKey('$key-$value'));
-  await tester.tap(option);
+  await tester.tap(find.text(label).last);
   await tester.pumpAndSettle();
 }
 
