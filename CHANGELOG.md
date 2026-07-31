@@ -10,6 +10,15 @@ and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Manual release workflow that builds a release APK and publishes a GitHub release.
+- Schedule, foreground-time, and launch-count app limits.
+- Rule persistence, editing, and enable/disable controls.
+- Permission setup and foreground blocking-service controls.
+- A blocking overlay with a return-home action.
+
+### Changed
+
+- Removed generated non-Android platform projects.
+- Removed settings and app actions that only opened placeholders.
 
 ## [0.2.1] - 2026-07-23
 

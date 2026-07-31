@@ -160,8 +160,7 @@ class _AppsScreenState extends State<AppsScreen>
           onTap: () => _openApp(app),
           onLongPress: () => showDialog<void>(
             context: context,
-            builder: (_) =>
-                AppOptionsDialog(app: app, appService: widget.appService),
+            builder: (_) => AppOptionsDialog(app: app),
           ),
         );
       },

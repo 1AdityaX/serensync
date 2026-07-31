@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../apps/app_service.dart';
 import 'blocking_engine.dart';
@@ -66,7 +67,7 @@ class _RulesScreenState extends State<RulesScreen> {
       enabled: enabled,
     );
     await widget.ruleStore.update(replacement);
-    signalRulesChanged();
+    FlutterForegroundTask.sendDataToTask(rulesChangedSignal);
     if (!mounted) return;
     setState(() {
       final rules = _rules;
@@ -80,7 +81,7 @@ class _RulesScreenState extends State<RulesScreen> {
 
   Future<void> _delete(BlockRule rule) async {
     await widget.ruleStore.delete(rule.id);
-    signalRulesChanged();
+    FlutterForegroundTask.sendDataToTask(rulesChangedSignal);
     if (!mounted) return;
     setState(() => _rules?.removeWhere((candidate) => candidate.id == rule.id));
   }

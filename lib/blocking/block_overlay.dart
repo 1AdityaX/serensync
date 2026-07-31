@@ -138,20 +138,6 @@ class _BlockScreenState extends State<_BlockScreen> {
     FlutterForegroundTask.launchApp();
   }
 
-  List<Widget> _packageLabel() {
-    if (_packageName.isEmpty) {
-      return const <Widget>[];
-    }
-    return <Widget>[
-      const SizedBox(height: 12),
-      Text(
-        _packageName,
-        textAlign: TextAlign.center,
-        style: const TextStyle(color: Color(0xffa9ad9f), fontSize: 14),
-      ),
-    ];
-  }
-
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -177,7 +163,17 @@ class _BlockScreenState extends State<_BlockScreen> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              ..._packageLabel(),
+              if (_packageName.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _packageName,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Color(0xffa9ad9f),
+                    fontSize: 14,
+                  ),
+                ),
+              ],
               const SizedBox(height: 32),
               FilledButton(
                 onPressed: _returnHome,

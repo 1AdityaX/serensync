@@ -14,6 +14,7 @@ const _keyguardHidden = 18;
 
 class ForegroundApp {
   final Map<String, _CachedUsage> _usageCache = <String, _CachedUsage>{};
+  String? _foregroundPackage;
   bool _isScreenInteractive = true;
   DateTime? _lastEventQuery;
   DateTime? _lastScreenEvent;
@@ -39,8 +40,11 @@ class ForegroundApp {
         latest = event;
       }
     }
+    if (latest != null) {
+      _foregroundPackage = latest.packageName;
+    }
     return (
-      packageName: latest?.packageName,
+      packageName: _foregroundPackage,
       screenInteractive: _isScreenInteractive,
     );
   }

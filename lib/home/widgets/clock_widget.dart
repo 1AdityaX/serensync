@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 class ClockWidget extends StatelessWidget {
   const ClockWidget({super.key});
@@ -10,10 +9,17 @@ class ClockWidget extends StatelessWidget {
       stream: Stream.periodic(const Duration(seconds: 1)),
       builder: (context, _) {
         return Text(
-          DateFormat('HH:mm:ss').format(DateTime.now()),
+          _clockText(DateTime.now()),
           style: const TextStyle(fontSize: 50),
         );
       },
     );
   }
+}
+
+String _clockText(DateTime time) {
+  final hour = time.hour.toString().padLeft(2, '0');
+  final minute = time.minute.toString().padLeft(2, '0');
+  final second = time.second.toString().padLeft(2, '0');
+  return '$hour:$minute:$second';
 }

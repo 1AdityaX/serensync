@@ -21,32 +21,6 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final RuleStore _ruleStore = RuleStore();
 
-  static const _settingsTitles = <String>[
-    'Monochrome Mode',
-    'Hidden Apps',
-    'Renamed Apps',
-    'App blocking',
-    'Blocking rules',
-    'Notification Filter',
-    'Apps Usage',
-  ];
-
-  void _openSetting(BuildContext context, String title) {
-    final screen = switch (title) {
-      'App blocking' => PermissionFlow(
-        permissionStatus: PermissionStatus(),
-        ruleStore: _ruleStore,
-        blockingService: BlockingService(),
-      ),
-      'Blocking rules' => RulesScreen(
-        ruleStore: _ruleStore,
-        appService: widget.appService,
-      ),
-      _ => _PlaceholderSettingsScreen(title: title),
-    };
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -57,19 +31,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Divider(height: 1, color: Colors.white, thickness: 1),
         ),
       ),
-      body: ListView.builder(
+      body: ListView(
         padding: const EdgeInsets.only(top: 7),
-        itemCount: _settingsTitles.length,
-        itemBuilder: (context, index) {
-          final title = _settingsTitles[index];
-          return Padding(
+        children: [
+          Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: ListTile(
-              title: Text(title),
-              onTap: () => _openSetting(context, title),
+              title: const Text('App blocking'),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => PermissionFlow(
+                    permissionStatus: PermissionStatus(),
+                    ruleStore: _ruleStore,
+                    blockingService: BlockingService(),
+                  ),
+                ),
+              ),
             ),
-          );
-        },
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: ListTile(
+              title: const Text('Blocking rules'),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => RulesScreen(
+                    ruleStore: _ruleStore,
+                    appService: widget.appService,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -78,19 +72,5 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     unawaited(_ruleStore.close());
     super.dispose();
-  }
-}
-
-class _PlaceholderSettingsScreen extends StatelessWidget {
-  final String title;
-
-  const _PlaceholderSettingsScreen({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(child: Text('$title Page')),
-    );
   }
 }

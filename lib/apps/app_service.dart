@@ -3,7 +3,6 @@ import 'package:apps_handler/apps_handler.dart';
 import 'app_store.dart';
 import 'installed_app.dart';
 
-/// The single boundary between the Flutter UI and the native apps plugin.
 class AppService {
   AppService({AppStore? store}) : _store = store ?? AppStore();
 
@@ -86,14 +85,6 @@ class AppService {
         updateTime: 0,
       ),
     );
-  }
-
-  Future<void> openAppSettings(String packageName) async {
-    await AppsHandler.openAppSettings(packageName);
-  }
-
-  Future<void> uninstallApp(String packageName) async {
-    await AppsHandler.uninstallApp(packageName);
   }
 
   Stream<AppEvent> get appChanges => AppsHandler.appChanges;

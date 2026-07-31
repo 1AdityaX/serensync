@@ -71,6 +71,24 @@ void main() {
   });
 
   test(
+    'foreground package persists when the next event window is empty',
+    () async {
+      events = <Map<String, String?>>[
+        _event(type: 1, at: now, packageName: packageName),
+      ];
+      final foreground = ForegroundApp();
+
+      expect((await foreground.foregroundState(now)).packageName, packageName);
+      events = <Map<String, String?>>[];
+
+      final nextState = await foreground.foregroundState(
+        now.add(const Duration(seconds: 1)),
+      );
+      expect(nextState.packageName, packageName);
+    },
+  );
+
+  test(
     'long screen-off polling interval cannot miss a screen-on event',
     () async {
       events = <Map<String, String?>>[_event(type: 16, at: now)];

@@ -1,113 +1,72 @@
 # SerenSync
 
-A minimalist Android launcher built with Flutter. SerenSync strips away distractions and gives you a calm, focused home screen — a clock, two quick-access shortcuts, and a clean alphabetical app drawer.
+SerenSync is an Android-only Flutter launcher with a built-in app blocker. It
+combines a quiet home screen with rules that interrupt distracting app use.
 
----
+## What works
 
-## Features
+- Minimal home screen with a clock, phone shortcut, and camera shortcut
+- Alphabetical app drawer with live search and package-change refresh
+- Persisted app list so the drawer can render before Android finishes a scan
+- App launch, system app settings, and uninstall actions
+- Schedule limits, including overnight windows
+- Daily foreground-time and launch-count limits
+- Enable, edit, and delete limits
+- Full-screen blocking overlay with a return-home action
+- Guided setup for usage access, overlays, notifications, and battery
+  optimisation
+- Foreground blocking service that restarts after boot and app updates
 
-- **Minimal home screen** — full-screen clock with configurable Phone and Camera shortcuts
-- **App drawer** — alphabetically sorted list of all installed apps with live search
-- **App options** — long-press any app to open its settings, uninstall it, hide it, or lock it
-- **Settings** — modular settings system with dedicated screens for:
-  - Monochrome Mode
-  - Hidden Apps
-  - Renamed Apps
-  - Locked Apps
-  - Apps Timer
-  - Notification Filter
-  - Apps Usage
-- **Default launcher support** — registers as a HOME intent handler so it can be set as your default launcher
+SerenSync deliberately has no accounts, analytics, backend, accessibility
+service, uninstall protection, or non-Android platform support.
 
----
+## Project layout
 
-## Architecture
-
-SerenSync uses a shallow, feature-first structure. Screens and state stay close
-to the feature that owns them, while reusable visual components live in a
-feature-local `widgets/` folder.
-
-```
+```text
 lib/
-├── main.dart
-├── apps/
-│   ├── app_service.dart             # Boundary around the native apps plugin
-│   ├── apps_screen.dart             # Installed apps, search, and refresh state
-│   └── widgets/
-│       ├── app_options_dialog.dart
-│       └── app_search_bar.dart
-├── home/
-│   ├── home_screen.dart
-│   └── widgets/
-│       └── clock_widget.dart
-└── settings/
-    └── settings_screen.dart
+  apps/        app discovery, persistence, search, and launch actions
+  blocking/    pure rule evaluation, persistence, engine, overlay, and UI
+  home/        launcher home screen and shortcuts
+  onboarding/  permission setup and blocking-service controls
+  settings/    settings navigation
 ```
 
-`AppsScreen` owns its loading, filtering, and app-change subscription state.
-`AppService` is constructor-injected so the native boundary can be replaced in
-tests without a dependency-injection framework.
+The main product logic lives in `lib/blocking/rule.dart`. It is pure Dart:
+plugins, Flutter APIs, and ambient clock access do not cross that boundary.
+Usage totals come from Android on demand and are never accumulated locally.
 
----
+## Run locally
 
-## Getting Started
+Requirements:
 
-### Prerequisites
-
-- Flutter SDK `>=3.11.0`
-- Android device or emulator (API 21+)
-- ADB connected or emulator running
-
-### Setup
+- Flutter 3.44.6 or a compatible stable release
+- An Android device or emulator
 
 ```bash
-git clone https://github.com/1AdityaX/serensync.git
-cd serensync
 flutter pub get
+flutter analyze
+flutter test
 flutter run
 ```
 
-### Set as default launcher (Android)
+Set SerenSync as the Home app under **Settings → Apps → Default apps → Home
+app**.
 
-1. Go to **Settings → Apps → Default apps → Home app**
-2. Select **SerenSync**
+The rule evaluator, persistence, widgets, and engine coordination are covered
+by automated tests. Foreground detection, overlay reliability, reboot
+recovery, and battery behavior still require a physical Android device.
 
-Or, after first launch, press the Home button and choose SerenSync when prompted.
+## Android permissions
 
----
-
-## Android Permissions
-
-| Permission | Reason |
+| Permission | Purpose |
 |---|---|
-| `QUERY_ALL_PACKAGES` | Required to list all installed apps |
-| `REQUEST_DELETE_PACKAGES` | Required to trigger app uninstallation |
+| `QUERY_ALL_PACKAGES` | List launchable apps |
+| `REQUEST_DELETE_PACKAGES` | Open Android's uninstall flow |
+| `PACKAGE_USAGE_STATS` | Detect the foreground app and read today's usage |
+| `SYSTEM_ALERT_WINDOW` | Display the blocking overlay |
+| `FOREGROUND_SERVICE_SPECIAL_USE` | Keep the blocking engine running |
+| `POST_NOTIFICATIONS` | Show the required foreground-service notification |
+| `RECEIVE_BOOT_COMPLETED` | Restart blocking after reboot |
+| `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Reduce background process killing |
 
----
-
-## Dependencies
-
-| Package | Version | Purpose |
-|---|---|---|
-| `apps_handler` | `^2.0.0` | Native plugin for listing, launching, and managing apps |
-| `android_intent_plus` | `^5.3.1` | Opens the default dialer and camera |
-| `intl` | `^0.20.2` | Clock time formatting |
-
----
-
-## Home Screen Shortcuts
-
-Phone uses Android's dial intent and Camera uses Android's still-image camera
-intent. Android resolves the correct installed app, so the shortcuts do not
-depend on manufacturer-specific package names.
-
----
-
-## Development Notes
-
-- Navigation uses Flutter's `Navigator` directly.
-- The search bar receives its value and callbacks from `AppsScreen`; clearing
-  search after an app launch updates both the list and text field.
-- `AppsScreen` cancels its native app-change subscription when disposed.
-- Settings features are currently represented by a single reusable placeholder
-  screen until their behavior is implemented.
+Usage data stays on the device.

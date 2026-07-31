@@ -7,6 +7,7 @@ import 'blocking/blocking_engine.dart';
 import 'home/home_screen.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   initializeBlockingService();
   runApp(MyApp());
 }

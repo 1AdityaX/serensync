@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../apps/app_service.dart';
 import '../apps/installed_app.dart';
@@ -75,7 +76,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
       } else {
         await widget.ruleStore.update(rule);
       }
-      signalRulesChanged();
+      FlutterForegroundTask.sendDataToTask(rulesChangedSignal);
       if (mounted) Navigator.of(context).pop(true);
     } catch (_) {
       if (!mounted) return;

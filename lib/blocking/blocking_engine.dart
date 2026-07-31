@@ -10,7 +10,6 @@ import 'rule_store.dart';
 
 const rulesChangedSignal = 'blocking.rulesChanged';
 const applicationId = 'com.example.serensync';
-const _ownPackage = applicationId;
 const _screenOnInterval = 1000;
 const _screenOffInterval = 60000;
 const _permissionCheckInterval = Duration(minutes: 1);
@@ -20,7 +19,7 @@ class BlockingEngine {
     ForegroundApp? foregroundApp,
     BlockOverlay? overlay,
     List<BlockRule> rules = const <BlockRule>[],
-    this.ownPackage = _ownPackage,
+    this.ownPackage = applicationId,
   }) : foregroundApp = foregroundApp ?? ForegroundApp(),
        overlay = overlay ?? BlockOverlay(),
        _rules = List<BlockRule>.unmodifiable(rules);
@@ -132,10 +131,6 @@ class BlockingService {
     final result = await FlutterForegroundTask.stopService();
     return result is ServiceRequestSuccess;
   }
-}
-
-void signalRulesChanged() {
-  FlutterForegroundTask.sendDataToTask(rulesChangedSignal);
 }
 
 class BlockingTask extends TaskHandler {
