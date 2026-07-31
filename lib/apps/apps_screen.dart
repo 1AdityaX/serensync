@@ -11,8 +11,9 @@ import 'widgets/app_search_bar.dart';
 
 class AppsScreen extends StatefulWidget {
   final AppService appService;
+  final VoidCallback? onOpenSerenSync;
 
-  const AppsScreen({super.key, required this.appService});
+  const AppsScreen({super.key, required this.appService, this.onOpenSerenSync});
 
   @override
   State<AppsScreen> createState() => _AppsScreenState();
@@ -92,6 +93,11 @@ class _AppsScreenState extends State<AppsScreen>
 
   Future<void> _openApp(InstalledApp app) async {
     setState(() => _searchQuery = '');
+    if (app.packageName == 'com.example.serensync' &&
+        widget.onOpenSerenSync != null) {
+      widget.onOpenSerenSync!();
+      return;
+    }
     await widget.appService.openApp(app);
   }
 
@@ -139,7 +145,7 @@ class _AppsScreenState extends State<AppsScreen>
         final app = apps[index];
         return ListTile(
           contentPadding: EdgeInsets.zero,
-          title: Text(app.displayName),
+          title: Text(app.displayName, style: const TextStyle(fontSize: 20)),
           onTap: () => _openApp(app),
           onLongPress: () => showDialog<void>(
             context: context,

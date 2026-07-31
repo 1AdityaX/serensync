@@ -9,10 +9,17 @@ import 'package:serensync/apps/app_store.dart';
 import 'package:serensync/apps/apps_screen.dart';
 import 'package:serensync/apps/installed_app.dart';
 import 'package:serensync/home/home_screen.dart';
+import 'package:serensync/launcher/launcher_controller.dart';
 import 'package:serensync/main.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
   late FakeAppService appService;
+
+  setUpAll(() {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  });
 
   setUp(() {
     appService = FakeAppService([
@@ -34,6 +41,7 @@ void main() {
 
     expect(find.text('Alpha'), findsNothing);
     expect(find.text('Beta'), findsOneWidget);
+    expect(tester.widget<Text>(find.text('Beta')).style?.fontSize, 20);
 
     await tester.tap(find.text('Beta'));
     await tester.pump();
@@ -45,6 +53,33 @@ void main() {
       '',
     );
     expect(find.text('Alpha'), findsOneWidget);
+  });
+
+  testWidgets('opening SerenSync from its launcher shows the main app', (
+    WidgetTester tester,
+  ) async {
+    appService.apps = [
+      _app(
+        'SerenSync',
+        'com.example.serensync',
+        'com.example.serensync.MainActivity',
+      ),
+    ];
+    await tester.pumpWidget(
+      MyApp(
+        appService: appService,
+        launcherController: FakeLauncherController(openedFromHome: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(PageView), const Offset(-500, 0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SerenSync'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('App blocking'), findsOneWidget);
+    expect(appService.openedPackages, isEmpty);
   });
 
   testWidgets('app drawer refreshes when installed apps change', (
@@ -137,7 +172,12 @@ void main() {
   testWidgets('leaving and reopening app drawer does not reload apps', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(MyApp(appService: appService));
+    await tester.pumpWidget(
+      MyApp(
+        appService: appService,
+        launcherController: FakeLauncherController(openedFromHome: true),
+      ),
+    );
     await tester.pump();
 
     await tester.drag(find.byType(PageView), const Offset(-500, 0));
@@ -157,7 +197,12 @@ void main() {
   testWidgets('back from app drawer returns home without reloading apps', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(MyApp(appService: appService));
+    await tester.pumpWidget(
+      MyApp(
+        appService: appService,
+        launcherController: FakeLauncherController(openedFromHome: true),
+      ),
+    );
     await tester.pump();
 
     await tester.drag(find.byType(PageView), const Offset(-500, 0));
@@ -174,7 +219,12 @@ void main() {
   testWidgets('back on home is absorbed without rebuilding the launcher', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(MyApp(appService: appService));
+    await tester.pumpWidget(
+      MyApp(
+        appService: appService,
+        launcherController: FakeLauncherController(openedFromHome: true),
+      ),
+    );
     await tester.pumpAndSettle();
     final homeElement = tester.element(find.byType(HomeScreen));
 
@@ -183,6 +233,29 @@ void main() {
 
     expect(tester.element(find.byType(HomeScreen)), same(homeElement));
     expect(appService.appListLoads, 0);
+  });
+
+  testWidgets('app icon opens the dashboard and can enable the launcher', (
+    WidgetTester tester,
+  ) async {
+    final launcherController = FakeLauncherController();
+    await tester.pumpWidget(
+      MyApp(appService: appService, launcherController: launcherController),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('App blocking'), findsOneWidget);
+    expect(find.byType(PageView), findsNothing);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('launcher-toggle')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(const ValueKey('launcher-toggle')));
+    await tester.pump();
+
+    expect(launcherController.enabled, isTrue);
   });
 
   test('queues a refresh while an app scan is running', () async {
@@ -276,6 +349,30 @@ class FakeAppService extends AppService {
   }
 
   void dispose() => _changes.close();
+}
+
+class FakeLauncherController extends LauncherController {
+  FakeLauncherController({this.openedFromHome = false, this.enabled = false});
+
+  final bool openedFromHome;
+  bool enabled;
+
+  @override
+  Future<bool> get isEnabled async => enabled;
+
+  @override
+  Future<bool> get openedAsLauncher async => openedFromHome;
+
+  @override
+  Future<void> setEnabled(bool enabled) async {
+    this.enabled = enabled;
+  }
+
+  @override
+  void listenForPresentationChanges(ValueChanged<bool> onChanged) {}
+
+  @override
+  void stopListening() {}
 }
 
 class FakeAppStore extends AppStore {
