@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:serensync/blocking/foreground_app.dart';
+import 'package:serensync/main_app/blocking/foreground_app.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

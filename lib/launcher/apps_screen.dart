@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:apps_handler/apps_handler.dart';
 import 'package:flutter/material.dart';
 
-import '../settings/settings_screen.dart';
-import 'app_service.dart';
-import 'installed_app.dart';
+import '../apps/app_service.dart';
+import '../apps/installed_app.dart';
+import '../main_app/settings_screen.dart';
 import 'widgets/app_options_dialog.dart';
 import 'widgets/app_search_bar.dart';
 

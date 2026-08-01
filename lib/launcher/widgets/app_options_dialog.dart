@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:apps_handler/apps_handler.dart';
 import 'package:flutter/material.dart';
 
-import '../installed_app.dart';
+import '../../apps/installed_app.dart';
 
 class AppOptionsDialog extends StatelessWidget {
   final InstalledApp app;

@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:serensync/blocking/block_overlay.dart';
-import 'package:serensync/blocking/blocking_engine.dart';
-import 'package:serensync/blocking/foreground_app.dart';
-import 'package:serensync/blocking/rule.dart';
+import 'package:serensync/main_app/blocking/block_overlay.dart';
+import 'package:serensync/main_app/blocking/blocking_engine.dart';
+import 'package:serensync/main_app/blocking/foreground_app.dart';
+import 'package:serensync/main_app/blocking/rule.dart';
 
 void main() {
   const blockedPackage = 'com.example.blocked';

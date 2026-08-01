@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
-import '../blocking/blocking_engine.dart';
-import '../blocking/rule_store.dart';
+import '../blocking_engine.dart';
+import '../rule_store.dart';
 import 'permission_status.dart';
 
 class PermissionFlow extends StatefulWidget {

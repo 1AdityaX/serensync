@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:serensync/blocking/blocking_engine.dart';
-import 'package:serensync/blocking/rule.dart';
-import 'package:serensync/blocking/rule_store.dart';
-import 'package:serensync/onboarding/permission_flow.dart';
-import 'package:serensync/onboarding/permission_status.dart';
+import 'package:serensync/main_app/blocking/blocking_engine.dart';
+import 'package:serensync/main_app/blocking/rule.dart';
+import 'package:serensync/main_app/blocking/rule_store.dart';
+import 'package:serensync/main_app/blocking/onboarding/permission_flow.dart';
+import 'package:serensync/main_app/blocking/onboarding/permission_status.dart';
 
 void main() {
   testWidgets('permission screen shows granted and missing permissions', (

@@ -3,11 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serensync/apps/app_service.dart';
 import 'package:serensync/apps/installed_app.dart';
-import 'package:serensync/blocking/blocking_engine.dart';
-import 'package:serensync/blocking/rule.dart';
-import 'package:serensync/blocking/rule_editor_screen.dart';
-import 'package:serensync/blocking/rule_store.dart';
-import 'package:serensync/blocking/rules_screen.dart';
+import 'package:serensync/main_app/blocking/blocking_engine.dart';
+import 'package:serensync/main_app/blocking/rule.dart';
+import 'package:serensync/main_app/blocking/rule_editor_screen.dart';
+import 'package:serensync/main_app/blocking/rule_store.dart';
+import 'package:serensync/main_app/blocking/rules_screen.dart';
 
 void main() {
   const taskChannel = MethodChannel('flutter_foreground_task/methods');

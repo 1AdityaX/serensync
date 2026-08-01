@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
-import '../apps/app_service.dart';
-import '../apps/installed_app.dart';
+import '../../apps/app_service.dart';
+import '../../apps/installed_app.dart';
 import 'blocking_engine.dart';
 import 'rule.dart';
 import 'rule_store.dart';

@@ -2,7 +2,7 @@ import 'package:android_intent_plus/android_intent.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:usage_stats/usage_stats.dart';
 
-import '../blocking/blocking_engine.dart';
+import '../blocking_engine.dart';
 
 enum RequiredPermission {
   usageAccess,

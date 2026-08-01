@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:serensync/blocking/rule.dart';
-import 'package:serensync/blocking/rule_store.dart';
+import 'package:serensync/main_app/blocking/rule.dart';
+import 'package:serensync/main_app/blocking/rule_store.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {

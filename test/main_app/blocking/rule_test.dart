@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:serensync/blocking/rule.dart';
+import 'package:serensync/main_app/blocking/rule.dart';
 
 const _packageName = 'com.example.focus';
 const _noUsage = AppUsage(foregroundTime: Duration.zero, launches: 0);

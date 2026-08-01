@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
-import '../apps/app_service.dart';
+import '../../apps/app_service.dart';
 import 'blocking_engine.dart';
 import 'rule.dart';
 import 'rule_editor_screen.dart';

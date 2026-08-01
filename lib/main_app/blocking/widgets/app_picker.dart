@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../apps/installed_app.dart';
+import '../../../apps/installed_app.dart';
 
 class AppPicker extends StatefulWidget {
   final List<InstalledApp> apps;

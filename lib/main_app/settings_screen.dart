@@ -3,11 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../apps/app_service.dart';
-import '../blocking/blocking_engine.dart';
-import '../blocking/rule_store.dart';
-import '../blocking/rules_screen.dart';
-import '../onboarding/permission_flow.dart';
-import '../onboarding/permission_status.dart';
+import 'blocking/blocking_engine.dart';
+import 'blocking/onboarding/permission_flow.dart';
+import 'blocking/onboarding/permission_status.dart';
+import 'blocking/rule_store.dart';
+import 'blocking/rules_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final AppService appService;

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
 import 'apps/app_service.dart';
-import 'apps/apps_screen.dart';
-import 'blocking/block_overlay.dart';
-import 'blocking/blocking_engine.dart';
-import 'home/home_screen.dart';
+import 'launcher/apps_screen.dart';
+import 'launcher/home/home_screen.dart';
 import 'launcher/launcher_controller.dart';
+import 'main_app/blocking/block_overlay.dart';
+import 'main_app/blocking/blocking_engine.dart';
 import 'main_app/dashboard_screen.dart';
 
 void main() {
