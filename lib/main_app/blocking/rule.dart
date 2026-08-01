@@ -6,12 +6,28 @@ class Schedule extends Trigger {
   final Set<int> weekdays;
   final int startMinute;
   final int endMinute;
+  final List<ScheduleTime> additionalTimes;
+  final bool allDay;
 
   const Schedule({
     required this.weekdays,
     required this.startMinute,
     required this.endMinute,
+    this.additionalTimes = const [],
+    this.allDay = false,
   });
+
+  List<ScheduleTime> get times => [
+    ScheduleTime(startMinute: startMinute, endMinute: endMinute),
+    ...additionalTimes,
+  ];
+}
+
+class ScheduleTime {
+  final int startMinute;
+  final int endMinute;
+
+  const ScheduleTime({required this.startMinute, required this.endMinute});
 }
 
 class UsageQuota extends Trigger {
@@ -90,9 +106,14 @@ Decision decide({
 
 String triggerSummary(Trigger trigger) {
   return switch (trigger) {
-    final Schedule schedule =>
+    final Schedule schedule when schedule.allDay =>
+      'Blocked ${weekdaySummary(schedule.weekdays)} all day',
+    final Schedule schedule when schedule.times.length == 1 =>
       'Blocked ${weekdaySummary(schedule.weekdays)} '
           '${ruleTime(schedule.startMinute)}–${ruleTime(schedule.endMinute)}',
+    final Schedule schedule =>
+      'Blocked ${weekdaySummary(schedule.weekdays)} · '
+          '${schedule.times.length} time windows',
     final UsageQuota quota =>
       'Blocked after ${ruleDuration(quota.limit)} a day',
     final LaunchQuota quota => 'Blocked after ${quota.limit} opens a day',
@@ -133,25 +154,29 @@ String ruleDuration(Duration duration) {
 }
 
 bool _scheduleBlocks(Schedule schedule, DateTime now) {
-  if (schedule.startMinute == schedule.endMinute) {
-    return false;
-  }
+  if (schedule.allDay) return schedule.weekdays.contains(now.weekday);
+  return schedule.times.any(
+    (time) => _timeBlocks(time, schedule.weekdays, now),
+  );
+}
+
+bool _timeBlocks(ScheduleTime time, Set<int> weekdays, DateTime now) {
+  if (time.startMinute == time.endMinute) return false;
 
   final minute = now.hour * 60 + now.minute;
-  if (schedule.endMinute > schedule.startMinute) {
-    return schedule.weekdays.contains(now.weekday) &&
-        minute >= schedule.startMinute &&
-        minute < schedule.endMinute;
+  if (time.endMinute > time.startMinute) {
+    return weekdays.contains(now.weekday) &&
+        minute >= time.startMinute &&
+        minute < time.endMinute;
   }
 
   // After midnight, the overnight window belongs to the previous weekday.
-  if (minute < schedule.endMinute) {
+  if (minute < time.endMinute) {
     final startWeekday = now.weekday == DateTime.monday
         ? DateTime.sunday
         : now.weekday - 1;
-    return schedule.weekdays.contains(startWeekday);
+    return weekdays.contains(startWeekday);
   }
 
-  return minute >= schedule.startMinute &&
-      schedule.weekdays.contains(now.weekday);
+  return minute >= time.startMinute && weekdays.contains(now.weekday);
 }

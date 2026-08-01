@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../../apps/app_service.dart';
+import '../blocking_colors.dart';
 import '../blocking_engine.dart';
 import '../rule.dart';
 import '../rule_editor_screen.dart';
@@ -96,7 +97,9 @@ class _RuleListState extends State<RuleList> {
             const Text('Could not load your limits.'),
             const SizedBox(height: 8),
             TextButton(
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              style: TextButton.styleFrom(
+                foregroundColor: BlockingColors.accent,
+              ),
               onPressed: _loadRules,
               child: const Text('Retry'),
             ),
@@ -107,7 +110,7 @@ class _RuleListState extends State<RuleList> {
     final rules = _rules;
     if (rules == null) {
       return const Center(
-        child: CircularProgressIndicator(color: Colors.white),
+        child: CircularProgressIndicator(color: BlockingColors.accent),
       );
     }
 
@@ -127,7 +130,10 @@ class _RuleListState extends State<RuleList> {
         if (rules.isEmpty)
           const Padding(
             padding: EdgeInsets.only(top: 24),
-            child: Text('No limits yet', style: TextStyle(color: Colors.white70)),
+            child: Text(
+              'No limits yet',
+              style: TextStyle(color: Colors.white70),
+            ),
           ),
         if (active.isNotEmpty) ...[
           const _SectionHeader('Active blocks'),
@@ -167,8 +173,8 @@ class _CreateBlockButton extends StatelessWidget {
         key: const ValueKey('create-block'),
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
-          foregroundColor: Colors.white,
-          side: const BorderSide(color: Colors.white70),
+          foregroundColor: BlockingColors.accent,
+          side: const BorderSide(color: BlockingColors.accent),
           shape: const StadiumBorder(),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         ),
@@ -239,6 +245,8 @@ class _BlockCard extends StatelessWidget {
             Switch(
               key: ValueKey('rule-enabled-${rule.id}'),
               value: rule.enabled,
+              activeTrackColor: BlockingColors.accent.withValues(alpha: 0.45),
+              activeThumbColor: BlockingColors.accent,
               onChanged: onToggle,
             ),
             IconButton(

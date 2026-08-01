@@ -40,6 +40,7 @@ void main() {
   testWidgets('schedule editor saves the entered rule', (tester) async {
     await _pumpEditor(tester, ruleStore, appService);
     await _nameAndSelectAlpha(tester);
+    await _openCondition(tester);
     await tester.tap(find.byKey(const ValueKey('weekday-2')));
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('weekday-7')));
@@ -60,6 +61,7 @@ void main() {
       find.byKey(const ValueKey('schedule-end-minute')),
       '00',
     );
+    await _closeCondition(tester);
     await tester.tap(find.byKey(const ValueKey('rule-save')));
     await tester.pumpAndSettle();
 
@@ -79,15 +81,67 @@ void main() {
     expect(rulesChangedSignals, 1);
   });
 
+  testWidgets('schedule editor adds and saves multiple time windows', (
+    tester,
+  ) async {
+    await _pumpEditor(tester, ruleStore, appService);
+    await _nameAndSelectAlpha(tester, name: 'Split focus');
+    await _openCondition(tester);
+
+    await tester.tap(find.byKey(const ValueKey('schedule-add-time')));
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const ValueKey('schedule-start-hour-1')),
+      '19',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('schedule-start-minute-1')),
+      '00',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('schedule-end-hour-1')),
+      '21',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('schedule-end-minute-1')),
+      '00',
+    );
+    await _closeCondition(tester);
+    await tester.tap(find.byKey(const ValueKey('rule-save')));
+    await tester.pumpAndSettle();
+
+    final schedule = ruleStore.rules.single.trigger as Schedule;
+    expect(schedule.times, hasLength(2));
+    expect(schedule.additionalTimes.single.startMinute, 19 * 60);
+    expect(schedule.additionalTimes.single.endMinute, 21 * 60);
+  });
+
+  testWidgets('schedule editor saves an all-day schedule', (tester) async {
+    await _pumpEditor(tester, ruleStore, appService);
+    await _nameAndSelectAlpha(tester, name: 'Deep work day');
+    await _openCondition(tester);
+
+    await tester.tap(find.byKey(const ValueKey('schedule-all-day')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('schedule-start-hour')), findsNothing);
+    await _closeCondition(tester);
+    await tester.tap(find.byKey(const ValueKey('rule-save')));
+    await tester.pumpAndSettle();
+
+    final schedule = ruleStore.rules.single.trigger as Schedule;
+    expect(schedule.allDay, isTrue);
+    expect(schedule.times, hasLength(1));
+  });
+
   testWidgets('limit picker shows the three limit types', (tester) async {
     await _pumpEditor(tester, ruleStore, appService);
 
     await tester.tap(find.byKey(const ValueKey('trigger-type')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Hours'), findsWidgets);
-    expect(find.text('Daily time'), findsOneWidget);
-    expect(find.text('Daily opens'), findsOneWidget);
+    expect(find.text('Time'), findsWidgets);
+    expect(find.text('Usage limit'), findsOneWidget);
+    expect(find.text('Launch count'), findsOneWidget);
   });
 
   testWidgets('usage quota editor preserves selection while filtering', (
@@ -98,8 +152,11 @@ void main() {
       find.byKey(const ValueKey('rule-name')),
       'Social time',
     );
-    await _chooseTrigger(tester, 'Daily time');
+    await _chooseTrigger(tester, 'Usage limit');
+    await _openCondition(tester);
     await tester.enterText(find.byKey(const ValueKey('usage-minutes')), '45');
+    await _closeCondition(tester);
+    await _openApps(tester);
     await _tapApp(tester, 'com.example.alpha');
     await tester.enterText(
       find.byKey(const ValueKey('app-picker-search')),
@@ -108,6 +165,7 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('app-com.example.alpha')), findsNothing);
     await _tapApp(tester, 'com.example.beta');
+    await _closeApps(tester);
     await tester.tap(find.byKey(const ValueKey('rule-save')));
     await tester.pumpAndSettle();
 
@@ -121,8 +179,10 @@ void main() {
   testWidgets('launch quota editor saves the entered rule', (tester) async {
     await _pumpEditor(tester, ruleStore, appService);
     await _nameAndSelectAlpha(tester, name: 'Stop reopening');
-    await _chooseTrigger(tester, 'Daily opens');
+    await _chooseTrigger(tester, 'Launch count');
+    await _openCondition(tester);
     await tester.enterText(find.byKey(const ValueKey('launch-count')), '7');
+    await _closeCondition(tester);
     await tester.tap(find.byKey(const ValueKey('rule-save')));
     await tester.pumpAndSettle();
 
@@ -135,18 +195,19 @@ void main() {
 
   testWidgets('save needs at least one app', (tester) async {
     await _pumpEditor(tester, ruleStore, appService);
-    TextButton save() => tester.widget(find.byKey(const ValueKey('rule-save')));
+    FilledButton save() =>
+        tester.widget(find.byKey(const ValueKey('rule-save')));
 
     expect(save().onPressed, isNull);
-    await _tapApp(tester, 'com.example.alpha');
+    await _selectApps(tester, ['com.example.alpha']);
     expect(save().onPressed, isNotNull);
-    await _tapApp(tester, 'com.example.alpha');
+    await _selectApps(tester, ['com.example.alpha']);
     expect(save().onPressed, isNull);
   });
 
   testWidgets('blank name saves the selected app name', (tester) async {
     await _pumpEditor(tester, ruleStore, appService);
-    await _tapApp(tester, 'com.example.alpha');
+    await _selectApps(tester, ['com.example.alpha']);
     await tester.tap(find.byKey(const ValueKey('rule-save')));
     await tester.pumpAndSettle();
 
@@ -155,8 +216,7 @@ void main() {
 
   testWidgets('blank name saves two selected app names', (tester) async {
     await _pumpEditor(tester, ruleStore, appService);
-    await _tapApp(tester, 'com.example.alpha');
-    await _tapApp(tester, 'com.example.beta');
+    await _selectApps(tester, ['com.example.alpha', 'com.example.beta']);
     await tester.tap(find.byKey(const ValueKey('rule-save')));
     await tester.pumpAndSettle();
 
@@ -168,9 +228,11 @@ void main() {
   ) async {
     appService.apps.add(_app('Gamma', 'com.example.gamma'));
     await _pumpEditor(tester, ruleStore, appService);
-    await _tapApp(tester, 'com.example.alpha');
-    await _tapApp(tester, 'com.example.beta');
-    await _tapApp(tester, 'com.example.gamma');
+    await _selectApps(tester, [
+      'com.example.alpha',
+      'com.example.beta',
+      'com.example.gamma',
+    ]);
     await tester.tap(find.byKey(const ValueKey('rule-save')));
     await tester.pumpAndSettle();
 
@@ -216,7 +278,11 @@ void main() {
     ruleStore.rules.add(rule);
     await _pumpEditor(tester, ruleStore, appService, rule: rule);
 
-    expect(find.text('Overnight · ends the next day'), findsNothing);
+    await _openCondition(tester);
+    expect(
+      find.text('This schedule includes a window that ends the following day.'),
+      findsNothing,
+    );
     await tester.enterText(
       find.byKey(const ValueKey('schedule-start-hour')),
       '22',
@@ -233,7 +299,11 @@ void main() {
       find.byKey(const ValueKey('schedule-end-minute')),
       '00',
     );
-    expect(find.text('Overnight · ends the next day'), findsOneWidget);
+    expect(
+      find.text('This schedule includes a window that ends the following day.'),
+      findsOneWidget,
+    );
+    await _closeCondition(tester);
     await tester.tap(find.byKey(const ValueKey('rule-save')));
     await tester.pumpAndSettle();
 
@@ -251,6 +321,7 @@ void main() {
   ) async {
     await _pumpEditor(tester, ruleStore, appService);
     await _nameAndSelectAlpha(tester);
+    await _openCondition(tester);
 
     await tester.enterText(
       find.byKey(const ValueKey('schedule-start-hour')),
@@ -268,6 +339,7 @@ void main() {
       find.byKey(const ValueKey('schedule-end-minute')),
       '',
     );
+    await _closeCondition(tester);
     await tester.tap(find.byKey(const ValueKey('rule-save')));
     await tester.pumpAndSettle();
 
@@ -313,7 +385,42 @@ Future<void> _nameAndSelectAlpha(
   String name = 'Morning focus',
 }) async {
   await tester.enterText(find.byKey(const ValueKey('rule-name')), name);
-  await _tapApp(tester, 'com.example.alpha');
+  await _selectApps(tester, ['com.example.alpha']);
+}
+
+Future<void> _selectApps(WidgetTester tester, List<String> packages) async {
+  await _openApps(tester);
+  for (final package in packages) {
+    await _tapApp(tester, package);
+  }
+  await _closeApps(tester);
+}
+
+Future<void> _openApps(WidgetTester tester) async {
+  final summary = find.byKey(const ValueKey('apps-summary'));
+  await tester.scrollUntilVisible(
+    summary,
+    180,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(summary);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _closeApps(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('app-picker-done')));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _openCondition(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('condition-summary')));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _closeCondition(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('condition-done')));
+  await tester.pumpAndSettle();
 }
 
 Future<void> _tapApp(WidgetTester tester, String package) async {

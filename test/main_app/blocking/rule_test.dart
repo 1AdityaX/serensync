@@ -54,6 +54,30 @@ void main() {
       'Blocked Mon–Wed 22:00–06:00',
     );
     expect(
+      triggerSummary(
+        const Schedule(
+          weekdays: {DateTime.saturday, DateTime.sunday},
+          startMinute: 9 * 60,
+          endMinute: 10 * 60,
+          allDay: true,
+        ),
+      ),
+      'Blocked Sat–Sun all day',
+    );
+    expect(
+      triggerSummary(
+        const Schedule(
+          weekdays: {DateTime.monday},
+          startMinute: 9 * 60,
+          endMinute: 10 * 60,
+          additionalTimes: [
+            ScheduleTime(startMinute: 14 * 60, endMinute: 15 * 60),
+          ],
+        ),
+      ),
+      'Blocked Mon · 2 time windows',
+    );
+    expect(
       triggerSummary(const UsageQuota(Duration(minutes: 30))),
       'Blocked after 30m a day',
     );
@@ -146,6 +170,46 @@ void main() {
       expect(_decisionFor(rule, DateTime(2024, 1, 1, 8, 59)), isA<Allow>());
       expect(_decisionFor(rule, DateTime(2024, 1, 1, 9)), isA<Allow>());
       expect(_decisionFor(rule, DateTime(2024, 1, 1, 23, 59)), isA<Allow>());
+    });
+
+    test('blocks during any configured time window', () {
+      const rule = BlockRule(
+        id: 1,
+        name: 'Split shift',
+        packages: {_packageName},
+        trigger: Schedule(
+          weekdays: {DateTime.monday},
+          startMinute: 9 * 60,
+          endMinute: 10 * 60,
+          additionalTimes: [
+            ScheduleTime(startMinute: 14 * 60, endMinute: 16 * 60),
+          ],
+        ),
+        enabled: true,
+      );
+
+      expect(_decisionFor(rule, DateTime(2024, 1, 1, 9, 30)), isA<Block>());
+      expect(_decisionFor(rule, DateTime(2024, 1, 1, 12)), isA<Allow>());
+      expect(_decisionFor(rule, DateTime(2024, 1, 1, 15)), isA<Block>());
+    });
+
+    test('all-day schedules ignore their retained time windows', () {
+      const rule = BlockRule(
+        id: 1,
+        name: 'Monday',
+        packages: {_packageName},
+        trigger: Schedule(
+          weekdays: {DateTime.monday},
+          startMinute: 9 * 60,
+          endMinute: 10 * 60,
+          allDay: true,
+        ),
+        enabled: true,
+      );
+
+      expect(_decisionFor(rule, DateTime(2024, 1, 1)), isA<Block>());
+      expect(_decisionFor(rule, DateTime(2024, 1, 1, 23, 59)), isA<Block>());
+      expect(_decisionFor(rule, DateTime(2024, 1, 2, 9)), isA<Allow>());
     });
   });
 

@@ -3,6 +3,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../apps/app_service.dart';
 import '../../apps/installed_app.dart';
+import 'blocking_colors.dart';
 import 'blocking_engine.dart';
 import 'rule.dart';
 import 'rule_store.dart';
@@ -30,7 +31,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
   late Set<String> _packages;
   late Trigger _trigger;
   late Future<List<InstalledApp>> _appsLoad;
-  List<InstalledApp> _installedApps = const <InstalledApp>[];
+  List<InstalledApp> _installedApps = const [];
   bool _saving = false;
   bool _saveError = false;
 
@@ -87,160 +88,99 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     }
   }
 
+  Future<void> _editCondition() async {
+    final trigger = await Navigator.of(context).push<Trigger>(
+      MaterialPageRoute(
+        builder: (_) => ConditionEditorScreen(trigger: _trigger),
+      ),
+    );
+    if (trigger != null && mounted) setState(() => _trigger = trigger);
+  }
+
+  Future<void> _selectApps(List<InstalledApp> apps) async {
+    final packages = await Navigator.of(context).push<Set<String>>(
+      MaterialPageRoute(
+        builder: (_) =>
+            AppPickerScreen(apps: apps, selectedPackages: _packages),
+      ),
+    );
+    if (packages != null && mounted) setState(() => _packages = packages);
+  }
+
+  void _changeTriggerType(String? type) {
+    setState(() {
+      _trigger = switch (type) {
+        'usage' => const UsageQuota(Duration(minutes: 30)),
+        'launch' => const LaunchQuota(5),
+        _ => TriggerEditor.defaultSchedule,
+      };
+    });
+  }
+
+  String get _triggerType => switch (_trigger) {
+    Schedule() => 'schedule',
+    UsageQuota() => 'usage',
+    LaunchQuota() => 'launch',
+  };
+
+  IconData get _conditionIcon => switch (_trigger) {
+    Schedule() => Icons.schedule,
+    UsageQuota() => Icons.hourglass_bottom,
+    LaunchQuota() => Icons.open_in_new,
+  };
+
+  (String, String) get _conditionSummary => switch (_trigger) {
+    final Schedule schedule when schedule.allDay => (
+      'All day',
+      weekdaySummary(schedule.weekdays),
+    ),
+    final Schedule schedule when schedule.times.length > 1 => (
+      '${schedule.times.length} time windows',
+      weekdaySummary(schedule.weekdays),
+    ),
+    final Schedule schedule => (
+      '${ruleTime(schedule.startMinute)}–${ruleTime(schedule.endMinute)}',
+      weekdaySummary(schedule.weekdays),
+    ),
+    final UsageQuota quota => (
+      '${ruleDuration(quota.limit)} / day',
+      'All day long',
+    ),
+    final LaunchQuota quota => ('${quota.limit}× / day', 'All day long'),
+  };
+
+  String? get _conditionNote => switch (_trigger) {
+    UsageQuota() => 'The usage limit is shared by all selected apps.',
+    LaunchQuota() => 'App launches are counted across all selected apps.',
+    Schedule() => null,
+  };
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: BlockingColors.background,
       appBar: AppBar(
-        titleSpacing: 4,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(widget.rule == null ? 'Create block' : 'Edit block'),
-            const Text(
-              'Choose what gets blocked and when',
-              style: TextStyle(
-                color: Colors.white54,
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
-              ),
-            ),
+        backgroundColor: BlockingColors.background,
+        centerTitle: true,
+        title: Text(widget.rule == null ? 'New schedule' : 'Edit schedule'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+        children: [
+          _nameField(),
+          const SizedBox(height: 30),
+          _conditionSection(),
+          const SizedBox(height: 30),
+          const Divider(color: Colors.white12),
+          const SizedBox(height: 24),
+          _blockingSection(),
+          if (_saveError) ...[
+            const SizedBox(height: 20),
+            const _ErrorMessage(),
           ],
-        ),
-        actions: [
-          TextButton(
-            key: const ValueKey('rule-save'),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.black,
-              backgroundColor: Colors.white,
-              disabledForegroundColor: Colors.white38,
-              disabledBackgroundColor: const Color(0xFF242424),
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            onPressed: _canSave ? _save : null,
-            child: Text(widget.rule == null ? 'Create' : 'Save'),
-          ),
-          const SizedBox(width: 12),
         ],
       ),
-      body: _body(),
-    );
-  }
-
-  Widget _body() {
-    return Column(
-      children: [
-        if (_saveError)
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1B1B1B),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white24),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.error_outline, size: 18, color: Colors.white70),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Could not save this block. Try again.',
-                    style: TextStyle(color: Colors.white70),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        Expanded(child: _editor()),
-      ],
-    );
-  }
-
-  Widget _editor() {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-      children: [
-        _sectionHeader(
-          number: '01',
-          title: 'Block details',
-          caption: 'Name it and set the condition',
-        ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFF111111),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white12),
-          ),
-          child: Column(
-            children: [
-              _nameField(),
-              const SizedBox(height: 18),
-              TriggerEditor(
-                trigger: _trigger,
-                onChanged: (trigger) => setState(() => _trigger = trigger),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 22),
-        _sectionHeader(
-          number: '02',
-          title: 'Apps to block',
-          caption: _packages.isEmpty
-              ? 'Select at least one app'
-              : '${_packages.length} selected',
-        ),
-        const SizedBox(height: 12),
-        Material(
-          color: const Color(0xFF111111),
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-            side: BorderSide(color: Colors.white12),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 14, 12, 0),
-            child: _appPicker(),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _sectionHeader({
-    required String number,
-    required String title,
-    required String caption,
-  }) {
-    return Row(
-      children: [
-        Text(
-          number,
-          style: const TextStyle(
-            color: Colors.white38,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.2,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-          ),
-        ),
-        Text(
-          caption,
-          style: const TextStyle(color: Colors.white54, fontSize: 12),
-        ),
-      ],
+      bottomNavigationBar: _bottomAction(),
     );
   }
 
@@ -248,64 +188,241 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     return TextField(
       key: const ValueKey('rule-name'),
       controller: _nameController,
-      cursorColor: Colors.white,
+      cursorColor: BlockingColors.accent,
+      textCapitalization: TextCapitalization.sentences,
+      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
       decoration: InputDecoration(
-        labelText: 'Block name',
-        hintText: _derivedName,
-        labelStyle: const TextStyle(color: Colors.white70),
-        floatingLabelStyle: const TextStyle(color: Colors.white),
-        prefixIcon: const Icon(Icons.edit_outlined, size: 19),
+        hintText: _derivedName.isEmpty ? 'Schedule name' : _derivedName,
         filled: true,
-        fillColor: const Color(0xFF1A1A1A),
+        fillColor: BlockingColors.surface,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 18,
+        ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.white12),
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.white54),
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: BlockingColors.accent),
         ),
       ),
-      textCapitalization: TextCapitalization.sentences,
     );
   }
 
-  Widget _appPicker() {
-    return FutureBuilder<List<InstalledApp>>(
-      future: _appsLoad,
-      builder: (context, snapshot) {
-        final apps = snapshot.data;
-        if (apps != null) {
-          _installedApps = apps;
-          return AppPicker(
-            apps: apps,
-            selectedPackages: _packages,
-            onChanged: (packages) => setState(() => _packages = packages),
-          );
-        }
-        if (snapshot.hasError) return _appLoadError();
-        return const Center(
-          child: CircularProgressIndicator(color: Colors.white),
-        );
-      },
-    );
-  }
-
-  Widget _appLoadError() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('Could not load your apps.'),
-          const SizedBox(height: 8),
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: Colors.white),
-            onPressed: () => setState(
-              () => _appsLoad = widget.appService.getInstalledApps(),
+  Widget _conditionSection() {
+    final (primary, secondary) = _conditionSummary;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Condition',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+              ),
             ),
-            child: const Text('Retry'),
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                key: const ValueKey('trigger-type'),
+                value: _triggerType,
+                dropdownColor: BlockingColors.surfaceRaised,
+                borderRadius: BorderRadius.circular(14),
+                icon: const Icon(
+                  Icons.keyboard_arrow_down,
+                  color: Colors.white70,
+                ),
+                style: const TextStyle(
+                  color: BlockingColors.accent,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'schedule', child: Text('Time')),
+                  DropdownMenuItem(value: 'usage', child: Text('Usage limit')),
+                  DropdownMenuItem(
+                    value: 'launch',
+                    child: Text('Launch count'),
+                  ),
+                ],
+                onChanged: _changeTriggerType,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Material(
+          color: BlockingColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            key: const ValueKey('condition-summary'),
+            onTap: _editCondition,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: const BoxDecoration(
+                      color: BlockingColors.accent,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(_conditionIcon, color: BlockingColors.onAccent),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          primary,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          secondary,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: Colors.white54),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (_conditionNote case final note?) ...[
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              border: Border.all(color: BlockingColors.outline),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline, color: BlockingColors.accent),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    note,
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _blockingSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Blocking',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Select the apps you want this schedule to block.',
+          style: TextStyle(color: Colors.white60, fontSize: 15),
+        ),
+        const SizedBox(height: 16),
+        FutureBuilder<List<InstalledApp>>(
+          future: _appsLoad,
+          builder: (context, snapshot) {
+            if (snapshot.hasData) {
+              _installedApps = snapshot.data!;
+              return Material(
+                color: BlockingColors.surface,
+                borderRadius: BorderRadius.circular(20),
+                clipBehavior: Clip.antiAlias,
+                child: ListTile(
+                  key: const ValueKey('apps-summary'),
+                  minTileHeight: 84,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                  title: const Text(
+                    'Apps',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '${_packages.length}',
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.chevron_right, color: Colors.white54),
+                    ],
+                  ),
+                  onTap: () => _selectApps(snapshot.data!),
+                ),
+              );
+            }
+            if (snapshot.hasError) {
+              return _AppsLoadError(
+                onRetry: () => setState(
+                  () => _appsLoad = widget.appService.getInstalledApps(),
+                ),
+              );
+            }
+            return const _AppsLoading();
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _bottomAction() {
+    return SafeArea(
+      top: false,
+      child: Container(
+        color: BlockingColors.background,
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+        child: FilledButton(
+          key: const ValueKey('rule-save'),
+          onPressed: _canSave ? _save : null,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(58),
+            backgroundColor: BlockingColors.accent,
+            foregroundColor: BlockingColors.onAccent,
+            disabledBackgroundColor: BlockingColors.surfaceRaised,
+            disabledForegroundColor: Colors.white38,
+            shape: const StadiumBorder(),
+            textStyle: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          child: _saving
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: BlockingColors.onAccent,
+                  ),
+                )
+              : Text(widget.rule == null ? 'Create' : 'Save changes'),
+        ),
       ),
     );
   }
@@ -314,5 +431,79 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
   void dispose() {
     _nameController.dispose();
     super.dispose();
+  }
+}
+
+class _AppsLoading extends StatelessWidget {
+  const _AppsLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 84,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: BoxDecoration(
+        color: BlockingColors.surface,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: const Row(
+        children: [
+          Expanded(child: Text('Loading apps…')),
+          SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: BlockingColors.accent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AppsLoadError extends StatelessWidget {
+  final VoidCallback onRetry;
+
+  const _AppsLoadError({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: BlockingColors.surface,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          const Expanded(child: Text('Could not load your apps.')),
+          TextButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorMessage extends StatelessWidget {
+  const _ErrorMessage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        border: Border.all(color: BlockingColors.outline),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.error_outline, color: BlockingColors.accent),
+          SizedBox(width: 12),
+          Expanded(child: Text('Could not save this schedule. Try again.')),
+        ],
+      ),
+    );
   }
 }

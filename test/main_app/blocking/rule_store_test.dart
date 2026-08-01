@@ -35,6 +35,10 @@ void main() {
           weekdays: {DateTime.monday, DateTime.wednesday, DateTime.friday},
           startMinute: 8 * 60,
           endMinute: 17 * 60,
+          additionalTimes: [
+            ScheduleTime(startMinute: 19 * 60, endMinute: 21 * 60),
+          ],
+          allDay: true,
         ),
         enabled: true,
       ),
@@ -63,6 +67,45 @@ void main() {
     expect(stored, hasLength(3));
     for (var index = 0; index < inputs.length; index++) {
       _expectRule(stored[index], inputs[index], expectedId: ids[index]);
+    }
+  });
+
+  test('reads legacy single-window schedule data', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'serensync_legacy_rule_test.',
+    );
+    final path = '${directory.path}/rules.db';
+    final legacyStore = RuleStore(databasePath: path);
+    try {
+      await legacyStore.readAll();
+      await legacyStore.close();
+      final database = await databaseFactoryFfi.openDatabase(path);
+      try {
+        await database.insert('rules', <String, Object?>{
+          'name': 'Legacy schedule',
+          'enabled': 1,
+          'trigger_type': 'schedule',
+          'trigger_json':
+              '{"weekdays":[1,2,3],"startMinute":540,"endMinute":1020}',
+        });
+      } finally {
+        await database.close();
+      }
+
+      final reader = RuleStore(databasePath: path);
+      try {
+        final schedule = (await reader.readAll()).single.trigger as Schedule;
+        expect(schedule.weekdays, {1, 2, 3});
+        expect(schedule.startMinute, 9 * 60);
+        expect(schedule.endMinute, 17 * 60);
+        expect(schedule.additionalTimes, isEmpty);
+        expect(schedule.allDay, isFalse);
+      } finally {
+        await reader.close();
+      }
+    } finally {
+      await legacyStore.close();
+      await directory.delete(recursive: true);
     }
   });
 
@@ -196,6 +239,21 @@ void _expectTrigger(Trigger actual, Trigger expected) {
       expect(actual.weekdays, unorderedEquals(expected.weekdays));
       expect(actual.startMinute, expected.startMinute);
       expect(actual.endMinute, expected.endMinute);
+      expect(actual.allDay, expected.allDay);
+      expect(
+        actual.additionalTimes,
+        hasLength(expected.additionalTimes.length),
+      );
+      for (var index = 0; index < expected.additionalTimes.length; index++) {
+        expect(
+          actual.additionalTimes[index].startMinute,
+          expected.additionalTimes[index].startMinute,
+        );
+        expect(
+          actual.additionalTimes[index].endMinute,
+          expected.additionalTimes[index].endMinute,
+        );
+      }
     case (final UsageQuota actual, final UsageQuota expected):
       expect(actual.limit, expected.limit);
     case (final LaunchQuota actual, final LaunchQuota expected):

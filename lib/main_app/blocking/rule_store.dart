@@ -168,6 +168,14 @@ Future<void> _insertPackages(
         'weekdays': schedule.weekdays.toList(),
         'startMinute': schedule.startMinute,
         'endMinute': schedule.endMinute,
+        'allDay': schedule.allDay,
+        'times': [
+          for (final time in schedule.times)
+            <String, int>{
+              'startMinute': time.startMinute,
+              'endMinute': time.endMinute,
+            },
+        ],
       }),
     ),
     final UsageQuota quota => (
@@ -186,17 +194,40 @@ Future<void> _insertPackages(
 Trigger _decodeTrigger(String type, String value) {
   final payload = jsonDecode(value) as Map<String, Object?>;
   return switch (type) {
-    'schedule' => Schedule(
-      weekdays: (payload['weekdays'] as List<Object?>)
-          .map((value) => value as int)
-          .toSet(),
-      startMinute: payload['startMinute'] as int,
-      endMinute: payload['endMinute'] as int,
-    ),
+    'schedule' => _decodeSchedule(payload),
     'usage_quota' => UsageQuota(
       Duration(microseconds: payload['limitMicroseconds'] as int),
     ),
     'launch_quota' => LaunchQuota(payload['limit'] as int),
     _ => throw FormatException('Unknown trigger type: $type'),
   };
+}
+
+Schedule _decodeSchedule(Map<String, Object?> payload) {
+  final encodedTimes = payload['times'];
+  final times = encodedTimes is List<Object?>
+      ? [
+          for (final value in encodedTimes)
+            ScheduleTime(
+              startMinute:
+                  (value as Map<String, Object?>)['startMinute'] as int,
+              endMinute: value['endMinute'] as int,
+            ),
+        ]
+      : <ScheduleTime>[];
+  final first = times.isEmpty
+      ? ScheduleTime(
+          startMinute: payload['startMinute'] as int,
+          endMinute: payload['endMinute'] as int,
+        )
+      : times.first;
+  return Schedule(
+    weekdays: (payload['weekdays'] as List<Object?>)
+        .map((value) => value as int)
+        .toSet(),
+    startMinute: first.startMinute,
+    endMinute: first.endMinute,
+    additionalTimes: times.skip(1).toList(),
+    allDay: payload['allDay'] as bool? ?? false,
+  );
 }
