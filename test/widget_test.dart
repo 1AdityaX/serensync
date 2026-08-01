@@ -11,6 +11,8 @@ import 'package:serensync/launcher/apps_screen.dart';
 import 'package:serensync/launcher/home/home_screen.dart';
 import 'package:serensync/launcher/launcher_controller.dart';
 import 'package:serensync/main.dart';
+import 'package:serensync/main_app/blocking/rule.dart';
+import 'package:serensync/main_app/blocking/rule_store.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -69,6 +71,7 @@ void main() {
       MyApp(
         appService: appService,
         launcherController: FakeLauncherController(openedFromHome: true),
+        ruleStore: FakeRuleStore(),
       ),
     );
     await tester.pumpAndSettle();
@@ -78,7 +81,7 @@ void main() {
     await tester.tap(find.text('SerenSync'));
     await tester.pumpAndSettle();
 
-    expect(find.text('App blocking'), findsOneWidget);
+    expect(find.text('Create a block'), findsOneWidget);
     expect(appService.openedPackages, isEmpty);
   });
 
@@ -176,6 +179,7 @@ void main() {
       MyApp(
         appService: appService,
         launcherController: FakeLauncherController(openedFromHome: true),
+        ruleStore: FakeRuleStore(),
       ),
     );
     await tester.pump();
@@ -201,6 +205,7 @@ void main() {
       MyApp(
         appService: appService,
         launcherController: FakeLauncherController(openedFromHome: true),
+        ruleStore: FakeRuleStore(),
       ),
     );
     await tester.pump();
@@ -223,6 +228,7 @@ void main() {
       MyApp(
         appService: appService,
         launcherController: FakeLauncherController(openedFromHome: true),
+        ruleStore: FakeRuleStore(),
       ),
     );
     await tester.pumpAndSettle();
@@ -240,18 +246,20 @@ void main() {
   ) async {
     final launcherController = FakeLauncherController();
     await tester.pumpWidget(
-      MyApp(appService: appService, launcherController: launcherController),
+      MyApp(
+        appService: appService,
+        launcherController: launcherController,
+        ruleStore: FakeRuleStore(),
+      ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('App blocking'), findsOneWidget);
+    expect(find.text('Create a block'), findsOneWidget);
     expect(find.byType(PageView), findsNothing);
 
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('launcher-toggle')),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await tester.tap(find.text('Settings'));
+    await tester.pump();
+
     await tester.tap(find.byKey(const ValueKey('launcher-toggle')));
     await tester.pump();
 
@@ -349,6 +357,23 @@ class FakeAppService extends AppService {
   }
 
   void dispose() => _changes.close();
+}
+
+class FakeRuleStore extends RuleStore {
+  @override
+  Future<List<BlockRule>> readAll() async => const [];
+
+  @override
+  Future<int> insert(BlockRule rule) async => 0;
+
+  @override
+  Future<void> update(BlockRule rule) async {}
+
+  @override
+  Future<void> delete(int id) async {}
+
+  @override
+  Future<void> close() async {}
 }
 
 class FakeLauncherController extends LauncherController {

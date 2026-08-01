@@ -6,6 +6,7 @@ import 'launcher/home/home_screen.dart';
 import 'launcher/launcher_controller.dart';
 import 'main_app/blocking/block_overlay.dart';
 import 'main_app/blocking/blocking_engine.dart';
+import 'main_app/blocking/rule_store.dart';
 import 'main_app/dashboard_screen.dart';
 
 void main() {
@@ -23,13 +24,16 @@ void overlayMain() {
 class MyApp extends StatelessWidget {
   final AppService appService;
   final LauncherController launcherController;
+  final RuleStore ruleStore;
 
   MyApp({
     super.key,
     AppService? appService,
     LauncherController? launcherController,
+    RuleStore? ruleStore,
   }) : appService = appService ?? AppService(),
-       launcherController = launcherController ?? LauncherController();
+       launcherController = launcherController ?? LauncherController(),
+       ruleStore = ruleStore ?? RuleStore();
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +55,7 @@ class MyApp extends StatelessWidget {
       home: MainScreen(
         appService: appService,
         launcherController: launcherController,
+        ruleStore: ruleStore,
       ),
     );
   }
@@ -59,11 +64,13 @@ class MyApp extends StatelessWidget {
 class MainScreen extends StatefulWidget {
   final AppService appService;
   final LauncherController launcherController;
+  final RuleStore ruleStore;
 
   const MainScreen({
     super.key,
     required this.appService,
     required this.launcherController,
+    required this.ruleStore,
   });
 
   @override
@@ -101,6 +108,7 @@ class _MainScreenState extends State<MainScreen> {
       return DashboardScreen(
         appService: widget.appService,
         launcherController: widget.launcherController,
+        ruleStore: widget.ruleStore,
       );
     }
     return LauncherScreen(

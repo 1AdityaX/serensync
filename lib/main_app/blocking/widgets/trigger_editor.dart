@@ -54,15 +54,20 @@ class TriggerEditor extends StatelessWidget {
       dropdownColor: const Color(0xFF191919),
       iconEnabledColor: Colors.white70,
       focusColor: Colors.transparent,
-      decoration: const InputDecoration(
-        labelText: 'Limit',
-        labelStyle: TextStyle(color: Colors.white70),
-        floatingLabelStyle: TextStyle(color: Colors.white),
-        enabledBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: Colors.white70),
+      decoration: InputDecoration(
+        labelText: 'Blocking condition',
+        labelStyle: const TextStyle(color: Colors.white70),
+        floatingLabelStyle: const TextStyle(color: Colors.white),
+        prefixIcon: const Icon(Icons.tune, size: 19),
+        filled: true,
+        fillColor: const Color(0xFF1A1A1A),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.white12),
         ),
-        focusedBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: Colors.white),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.white54),
         ),
       ),
       items: const [
@@ -119,11 +124,15 @@ InputDecoration _numberDecoration(String label, {String? suffix}) {
     suffixText: suffix,
     labelStyle: const TextStyle(color: Colors.white70),
     floatingLabelStyle: const TextStyle(color: Colors.white),
-    enabledBorder: const UnderlineInputBorder(
-      borderSide: BorderSide(color: Colors.white70),
+    filled: true,
+    fillColor: const Color(0xFF1A1A1A),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: Colors.white12),
     ),
-    focusedBorder: const UnderlineInputBorder(
-      borderSide: BorderSide(color: Colors.white),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: Colors.white54),
     ),
   );
 }
@@ -162,10 +171,13 @@ class _ScheduleEditor extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Blocked on'),
+        const Text(
+          'Active days',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
         const SizedBox(height: 8),
         _weekdayPicker(),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         _timeEditor(start: true),
         const SizedBox(height: 8),
         _timeEditor(start: false),
@@ -257,8 +269,10 @@ class _ScheduleEditor extends StatelessWidget {
       style: TextButton.styleFrom(
         foregroundColor: selected ? Colors.black : Colors.white,
         backgroundColor: selected ? Colors.white : const Color(0xFF191919),
-        side: const BorderSide(color: Colors.white70),
+        side: BorderSide(color: selected ? Colors.white : Colors.white24),
         shape: const StadiumBorder(),
+        minimumSize: const Size(42, 38),
+        padding: const EdgeInsets.symmetric(horizontal: 11),
       ),
       onPressed: () => _toggleWeekday(weekday, !selected),
       child: Text(label),

@@ -5,21 +5,22 @@ import 'package:flutter/services.dart';
 
 import '../apps/app_service.dart';
 import '../launcher/launcher_controller.dart';
-import 'blocking/blocking_engine.dart';
-import 'blocking/onboarding/permission_flow.dart';
-import 'blocking/onboarding/permission_status.dart';
 import 'blocking/rule_store.dart';
-import 'blocking/rules_screen.dart';
+import 'blocking/widgets/rule_list.dart';
+
+enum _DashboardTab { pomodoro, blocks, strictMode, stats, settings }
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
     super.key,
     required this.appService,
     required this.launcherController,
+    required this.ruleStore,
   });
 
   final AppService appService;
   final LauncherController launcherController;
+  final RuleStore ruleStore;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -27,9 +28,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen>
     with WidgetsBindingObserver {
-  final RuleStore _ruleStore = RuleStore();
-  final BlockingService _blockingService = BlockingService();
-
+  _DashboardTab _tab = _DashboardTab.blocks;
   bool _launcherEnabled = false;
   bool _launcherChanging = false;
 
@@ -50,27 +49,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   Future<void> _refreshLauncher() async {
     final enabled = await widget.launcherController.isEnabled;
     if (mounted) setState(() => _launcherEnabled = enabled);
-  }
-
-  Future<void> _openBlockingSetup() {
-    return Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => PermissionFlow(
-          permissionStatus: PermissionStatus(),
-          ruleStore: _ruleStore,
-          blockingService: _blockingService,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _openRules() {
-    return Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) =>
-            RulesScreen(ruleStore: _ruleStore, appService: widget.appService),
-      ),
-    );
   }
 
   Future<void> _setLauncherEnabled(bool enabled) async {
@@ -94,35 +72,105 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('SerenSync')),
-      body: ListView(
-        children: [
-          ListTile(
-            title: const Text('App blocking'),
-            subtitle: const Text('Permissions and blocking service'),
-            onTap: _openBlockingSetup,
+      body: _buildBody(),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _tab.index,
+        onDestinationSelected: (index) =>
+            setState(() => _tab = _DashboardTab.values[index]),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.timer_outlined),
+            label: 'Pomodoro',
           ),
-          ListTile(
-            title: const Text('Blocking rules'),
-            subtitle: const Text('Choose apps and set limits'),
-            onTap: _openRules,
+          NavigationDestination(
+            icon: Icon(Icons.block_outlined),
+            label: 'Blocks',
           ),
-          const Divider(),
-          SwitchListTile(
-            key: const ValueKey('launcher-toggle'),
-            title: const Text('Minimal launcher'),
-            subtitle: const Text('Use SerenSync as your Home app'),
-            value: _launcherEnabled,
-            onChanged: _launcherChanging ? null : _setLauncherEnabled,
+          NavigationDestination(
+            icon: Icon(Icons.shield_outlined),
+            label: 'Strict',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.bar_chart_outlined),
+            label: 'Stats',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            label: 'Settings',
           ),
         ],
       ),
     );
   }
 
+  Widget _buildBody() {
+    switch (_tab) {
+      case _DashboardTab.pomodoro:
+        return const _ComingSoonTab(title: 'Pomodoro');
+      case _DashboardTab.blocks:
+        return RuleList(
+          ruleStore: widget.ruleStore,
+          appService: widget.appService,
+        );
+      case _DashboardTab.strictMode:
+        return const _ComingSoonTab(title: 'Strict mode');
+      case _DashboardTab.stats:
+        return const _ComingSoonTab(title: 'Stats');
+      case _DashboardTab.settings:
+        return _SettingsTab(
+          launcherEnabled: _launcherEnabled,
+          launcherChanging: _launcherChanging,
+          onLauncherChanged: _setLauncherEnabled,
+        );
+    }
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    unawaited(_ruleStore.close());
     super.dispose();
+  }
+}
+
+class _SettingsTab extends StatelessWidget {
+  const _SettingsTab({
+    required this.launcherEnabled,
+    required this.launcherChanging,
+    required this.onLauncherChanged,
+  });
+
+  final bool launcherEnabled;
+  final bool launcherChanging;
+  final ValueChanged<bool> onLauncherChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      children: [
+        SwitchListTile(
+          key: const ValueKey('launcher-toggle'),
+          title: const Text('Minimal launcher'),
+          subtitle: const Text('Use SerenSync as your Home app'),
+          value: launcherEnabled,
+          onChanged: launcherChanging ? null : onLauncherChanged,
+        ),
+      ],
+    );
+  }
+}
+
+class _ComingSoonTab extends StatelessWidget {
+  const _ComingSoonTab({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        '$title is coming soon',
+        style: const TextStyle(color: Colors.white70),
+      ),
+    );
   }
 }

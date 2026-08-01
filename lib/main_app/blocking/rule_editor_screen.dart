@@ -91,17 +91,38 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.rule == null ? 'New limit' : 'Edit limit'),
+        titleSpacing: 4,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.rule == null ? 'Create block' : 'Edit block'),
+            const Text(
+              'Choose what gets blocked and when',
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             key: const ValueKey('rule-save'),
             style: TextButton.styleFrom(
-              foregroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              backgroundColor: Colors.white,
               disabledForegroundColor: Colors.white38,
+              disabledBackgroundColor: const Color(0xFF242424),
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             onPressed: _canSave ? _save : null,
-            child: const Text('Save'),
+            child: Text(widget.rule == null ? 'Create' : 'Save'),
           ),
+          const SizedBox(width: 12),
         ],
       ),
       body: _body(),
@@ -112,11 +133,26 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     return Column(
       children: [
         if (_saveError)
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Text(
-              'Could not save. Try again.',
-              style: TextStyle(color: Colors.white70),
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1B1B1B),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white24),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.error_outline, size: 18, color: Colors.white70),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Could not save this block. Try again.',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                ),
+              ],
             ),
           ),
         Expanded(child: _editor()),
@@ -125,24 +161,86 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
   }
 
   Widget _editor() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _nameField(),
-          const SizedBox(height: 12),
-          TriggerEditor(
-            trigger: _trigger,
-            onChanged: (trigger) => setState(() => _trigger = trigger),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      children: [
+        _sectionHeader(
+          number: '01',
+          title: 'Block details',
+          caption: 'Name it and set the condition',
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF111111),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white12),
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Divider(),
+          child: Column(
+            children: [
+              _nameField(),
+              const SizedBox(height: 18),
+              TriggerEditor(
+                trigger: _trigger,
+                onChanged: (trigger) => setState(() => _trigger = trigger),
+              ),
+            ],
           ),
-          Expanded(child: _appPicker()),
-        ],
-      ),
+        ),
+        const SizedBox(height: 22),
+        _sectionHeader(
+          number: '02',
+          title: 'Apps to block',
+          caption: _packages.isEmpty
+              ? 'Select at least one app'
+              : '${_packages.length} selected',
+        ),
+        const SizedBox(height: 12),
+        Material(
+          color: const Color(0xFF111111),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            side: BorderSide(color: Colors.white12),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 14, 12, 0),
+            child: _appPicker(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _sectionHeader({
+    required String number,
+    required String title,
+    required String caption,
+  }) {
+    return Row(
+      children: [
+        Text(
+          number,
+          style: const TextStyle(
+            color: Colors.white38,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+          ),
+        ),
+        Text(
+          caption,
+          style: const TextStyle(color: Colors.white54, fontSize: 12),
+        ),
+      ],
     );
   }
 
@@ -152,15 +250,20 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
       controller: _nameController,
       cursorColor: Colors.white,
       decoration: InputDecoration(
-        labelText: 'Name (optional)',
+        labelText: 'Block name',
         hintText: _derivedName,
         labelStyle: const TextStyle(color: Colors.white70),
         floatingLabelStyle: const TextStyle(color: Colors.white),
-        enabledBorder: const UnderlineInputBorder(
-          borderSide: BorderSide(color: Colors.white70),
+        prefixIcon: const Icon(Icons.edit_outlined, size: 19),
+        filled: true,
+        fillColor: const Color(0xFF1A1A1A),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.white12),
         ),
-        focusedBorder: const UnderlineInputBorder(
-          borderSide: BorderSide(color: Colors.white),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.white54),
         ),
       ),
       textCapitalization: TextCapitalization.sentences,
