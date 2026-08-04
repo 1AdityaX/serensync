@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:apps_handler/apps_handler.dart';
 
 import 'app_store.dart';
@@ -7,9 +9,22 @@ class AppService {
   AppService({AppStore? store}) : _store = store ?? AppStore();
 
   final AppStore _store;
+  final Map<String, Uint8List> _cachedIcons = <String, Uint8List>{};
   List<InstalledApp>? _cachedApps;
   Future<List<InstalledApp>>? _appsLoad;
   bool _refreshPending = false;
+
+  Future<Uint8List?> readIcon(String packageName) async {
+    final cached = _cachedIcons[packageName];
+    if (cached != null) return cached;
+
+    final icon = (await AppsHandler.getApp(
+      packageName,
+      includeAppIcon: true,
+    ))?.appIcon;
+    if (icon == null) return null;
+    return _cachedIcons[packageName] = Uint8List.fromList(icon);
+  }
 
   Future<List<InstalledApp>> readPersistedApps() {
     return _store.readAll();

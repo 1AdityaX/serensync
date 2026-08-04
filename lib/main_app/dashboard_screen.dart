@@ -5,8 +5,12 @@ import 'package:flutter/services.dart';
 
 import '../apps/app_service.dart';
 import '../launcher/launcher_controller.dart';
+import 'blocking/blocking_engine.dart';
+import 'blocking/onboarding/permission_flow.dart';
+import 'blocking/onboarding/permission_status.dart';
 import 'blocking/rule_store.dart';
 import 'blocking/widgets/rule_list.dart';
+import 'stats/stats_tab.dart';
 
 enum _DashboardTab { pomodoro, blocks, strictMode, stats, settings }
 
@@ -115,9 +119,10 @@ class _DashboardScreenState extends State<DashboardScreen>
       case _DashboardTab.strictMode:
         return const _ComingSoonTab(title: 'Strict mode');
       case _DashboardTab.stats:
-        return const _ComingSoonTab(title: 'Stats');
+        return StatsTab(appService: widget.appService);
       case _DashboardTab.settings:
         return _SettingsTab(
+          ruleStore: widget.ruleStore,
           launcherEnabled: _launcherEnabled,
           launcherChanging: _launcherChanging,
           onLauncherChanged: _setLauncherEnabled,
@@ -134,11 +139,13 @@ class _DashboardScreenState extends State<DashboardScreen>
 
 class _SettingsTab extends StatelessWidget {
   const _SettingsTab({
+    required this.ruleStore,
     required this.launcherEnabled,
     required this.launcherChanging,
     required this.onLauncherChanged,
   });
 
+  final RuleStore ruleStore;
   final bool launcherEnabled;
   final bool launcherChanging;
   final ValueChanged<bool> onLauncherChanged;
@@ -147,6 +154,20 @@ class _SettingsTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       children: [
+        ListTile(
+          key: const ValueKey('app-blocking'),
+          title: const Text('App blocking'),
+          subtitle: const Text('Permissions and enforcement'),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => PermissionFlow(
+                permissionStatus: PermissionStatus(),
+                ruleStore: ruleStore,
+                blockingService: BlockingService(),
+              ),
+            ),
+          ),
+        ),
         SwitchListTile(
           key: const ValueKey('launcher-toggle'),
           title: const Text('Minimal launcher'),
