@@ -64,6 +64,8 @@ class _RuleListState extends State<RuleList> {
       id: rule.id,
       name: rule.name,
       packages: rule.packages,
+      websites: rule.websites,
+      keywords: rule.keywords,
       trigger: rule.trigger,
       enabled: enabled,
     );
@@ -220,7 +222,6 @@ class _BlockCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final appCount = rule.packages.length;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
@@ -232,8 +233,7 @@ class _BlockCard extends StatelessWidget {
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                '${triggerSummary(rule.trigger)} · '
-                '$appCount ${appCount == 1 ? 'app' : 'apps'}',
+                '${triggerSummary(rule.trigger)} · ${_targetSummary(rule)}',
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -260,6 +260,20 @@ class _BlockCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _targetSummary(BlockRule rule) {
+  final parts = <String>[
+    if (rule.packages.isNotEmpty) _count(rule.packages.length, 'app', 'apps'),
+    if (rule.websites.isNotEmpty) _count(rule.websites.length, 'site', 'sites'),
+    if (rule.keywords.isNotEmpty)
+      _count(rule.keywords.length, 'keyword', 'keywords'),
+  ];
+  return parts.join(' · ');
+}
+
+String _count(int count, String singular, String plural) {
+  return '$count ${count == 1 ? singular : plural}';
 }
 
 IconData _triggerIcon(Trigger trigger) {

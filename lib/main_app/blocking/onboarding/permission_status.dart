@@ -1,4 +1,5 @@
 import 'package:android_intent_plus/android_intent.dart';
+import 'package:flutter_accessibility_service/flutter_accessibility_service.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:usage_stats/usage_stats.dart';
 
@@ -9,6 +10,7 @@ enum RequiredPermission {
   overlay,
   notifications,
   batteryOptimisation,
+  accessibility,
 }
 
 class PermissionState {
@@ -17,14 +19,18 @@ class PermissionState {
     required this.overlay,
     required this.notifications,
     required this.batteryOptimisation,
+    required this.accessibility,
   });
 
   final bool usageAccess;
   final bool overlay;
   final bool notifications;
   final bool batteryOptimisation;
+  final bool accessibility;
 
-  bool get allGranted =>
+  /// Whether every block can be enforced. Accessibility is only needed by
+  /// blocks with websites or keywords.
+  bool get requiredGranted =>
       usageAccess && overlay && notifications && batteryOptimisation;
 
   bool granted(RequiredPermission permission) {
@@ -33,6 +39,7 @@ class PermissionState {
       RequiredPermission.overlay => overlay,
       RequiredPermission.notifications => notifications,
       RequiredPermission.batteryOptimisation => batteryOptimisation,
+      RequiredPermission.accessibility => accessibility,
     };
   }
 }
@@ -46,11 +53,14 @@ class PermissionStatus {
         NotificationPermission.granted;
     final batteryOptimisation =
         await FlutterForegroundTask.isIgnoringBatteryOptimizations;
+    final accessibility =
+        await FlutterAccessibilityService.isAccessibilityPermissionEnabled();
     return PermissionState(
       usageAccess: usageAccess,
       overlay: overlay,
       notifications: notifications,
       batteryOptimisation: batteryOptimisation,
+      accessibility: accessibility,
     );
   }
 
@@ -67,6 +77,8 @@ class PermissionStatus {
         await _requestNotifications();
       case RequiredPermission.batteryOptimisation:
         await FlutterForegroundTask.requestIgnoreBatteryOptimization();
+      case RequiredPermission.accessibility:
+        await FlutterAccessibilityService.requestAccessibilityPermission();
     }
   }
 

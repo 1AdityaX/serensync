@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Reads the address bar of supported browsers for website and keyword blocks.
+     Keep packageNames in sync with browserAddressBars in
+     lib/main_app/blocking/browser_watcher.dart. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/accessibility_service_description"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewTextChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
+    android:canRetrieveWindowContent="true"
+    android:notificationTimeout="300"
+    android:packageNames="com.android.chrome,com.chrome.beta,com.chrome.dev,com.chrome.canary,com.brave.browser,com.brave.browser_beta,com.microsoft.emmx,com.kiwibrowser.browser,com.vivaldi.browser,com.ecosia.android,app.vanadium.browser,org.mozilla.firefox,org.mozilla.firefox_beta,org.mozilla.fenix,org.mozilla.focus,org.torproject.torbrowser,com.opera.browser,com.opera.browser.beta,com.opera.mini.native,com.opera.mini.native.beta,com.duckduckgo.mobile.android,com.sec.android.app.sbrowser,com.sec.android.app.sbrowser.beta,com.coloros.browser" />

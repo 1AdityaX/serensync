@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:serensync/apps/app_service.dart';
 import 'package:serensync/apps/installed_app.dart';
 import 'package:serensync/main_app/blocking/blocking_engine.dart';
+import 'package:serensync/main_app/blocking/onboarding/permission_status.dart';
 import 'package:serensync/main_app/blocking/rule.dart';
 import 'package:serensync/main_app/blocking/rule_editor_screen.dart';
 import 'package:serensync/main_app/blocking/rule_store.dart';
@@ -13,6 +14,7 @@ void main() {
   const taskChannel = MethodChannel('flutter_foreground_task/methods');
   late FakeRuleStore ruleStore;
   late FakeAppService appService;
+  late FakePermissionStatus permissionStatus;
   late int rulesChangedSignals;
 
   setUp(() {
@@ -26,6 +28,7 @@ void main() {
           return null;
         });
     ruleStore = FakeRuleStore();
+    permissionStatus = FakePermissionStatus();
     appService = FakeAppService([
       _app('Alpha', 'com.example.alpha'),
       _app('Beta', 'com.example.beta'),
@@ -38,7 +41,7 @@ void main() {
   });
 
   testWidgets('schedule editor saves the entered rule', (tester) async {
-    await _pumpEditor(tester, ruleStore, appService);
+    await _pumpEditor(tester, ruleStore, appService, permissionStatus);
     await _nameAndSelectAlpha(tester);
     await _openCondition(tester);
     await tester.tap(find.byKey(const ValueKey('weekday-2')));
@@ -84,7 +87,7 @@ void main() {
   testWidgets('schedule editor adds and saves multiple time windows', (
     tester,
   ) async {
-    await _pumpEditor(tester, ruleStore, appService);
+    await _pumpEditor(tester, ruleStore, appService, permissionStatus);
     await _nameAndSelectAlpha(tester, name: 'Split focus');
     await _openCondition(tester);
 
@@ -117,7 +120,7 @@ void main() {
   });
 
   testWidgets('schedule editor saves an all-day schedule', (tester) async {
-    await _pumpEditor(tester, ruleStore, appService);
+    await _pumpEditor(tester, ruleStore, appService, permissionStatus);
     await _nameAndSelectAlpha(tester, name: 'Deep work day');
     await _openCondition(tester);
 
@@ -134,7 +137,7 @@ void main() {
   });
 
   testWidgets('limit picker shows the three limit types', (tester) async {
-    await _pumpEditor(tester, ruleStore, appService);
+    await _pumpEditor(tester, ruleStore, appService, permissionStatus);
 
     await tester.tap(find.byKey(const ValueKey('trigger-type')));
     await tester.pumpAndSettle();
@@ -147,7 +150,7 @@ void main() {
   testWidgets('usage quota editor preserves selection while filtering', (
     tester,
   ) async {
-    await _pumpEditor(tester, ruleStore, appService);
+    await _pumpEditor(tester, ruleStore, appService, permissionStatus);
     await tester.enterText(
       find.byKey(const ValueKey('rule-name')),
       'Social time',
@@ -177,7 +180,7 @@ void main() {
   });
 
   testWidgets('launch quota editor saves the entered rule', (tester) async {
-    await _pumpEditor(tester, ruleStore, appService);
+    await _pumpEditor(tester, ruleStore, appService, permissionStatus);
     await _nameAndSelectAlpha(tester, name: 'Stop reopening');
     await _chooseTrigger(tester, 'Launch count');
     await _openCondition(tester);
@@ -194,7 +197,7 @@ void main() {
   });
 
   testWidgets('save needs at least one app', (tester) async {
-    await _pumpEditor(tester, ruleStore, appService);
+    await _pumpEditor(tester, ruleStore, appService, permissionStatus);
     FilledButton save() =>
         tester.widget(find.byKey(const ValueKey('rule-save')));
 
@@ -206,7 +209,7 @@ void main() {
   });
 
   testWidgets('blank name saves the selected app name', (tester) async {
-    await _pumpEditor(tester, ruleStore, appService);
+    await _pumpEditor(tester, ruleStore, appService, permissionStatus);
     await _selectApps(tester, ['com.example.alpha']);
     await tester.tap(find.byKey(const ValueKey('rule-save')));
     await tester.pumpAndSettle();
@@ -215,7 +218,7 @@ void main() {
   });
 
   testWidgets('blank name saves two selected app names', (tester) async {
-    await _pumpEditor(tester, ruleStore, appService);
+    await _pumpEditor(tester, ruleStore, appService, permissionStatus);
     await _selectApps(tester, ['com.example.alpha', 'com.example.beta']);
     await tester.tap(find.byKey(const ValueKey('rule-save')));
     await tester.pumpAndSettle();
@@ -227,7 +230,7 @@ void main() {
     tester,
   ) async {
     appService.apps.add(_app('Gamma', 'com.example.gamma'));
-    await _pumpEditor(tester, ruleStore, appService);
+    await _pumpEditor(tester, ruleStore, appService, permissionStatus);
     await _selectApps(tester, [
       'com.example.alpha',
       'com.example.beta',
@@ -237,6 +240,111 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(ruleStore.rules.single.name, 'Alpha, Beta + 1 more');
+  });
+
+  testWidgets('website and keyword pickers normalise, reject, and save', (
+    tester,
+  ) async {
+    await _pumpEditor(tester, ruleStore, appService, permissionStatus);
+    await _openTargets(tester, 'websites-summary');
+    await _addTarget(tester, 'https://www.Instagram.com/reels');
+    await _addTarget(tester, 'not a website');
+    expect(find.text('Enter a website such as instagram.com.'), findsOneWidget);
+    await _addTarget(tester, 'Reddit.com');
+    expect(find.text('Enter a website such as instagram.com.'), findsNothing);
+    await tester.tap(
+      find.byKey(const ValueKey('remove-web-target-reddit.com')),
+    );
+    await tester.pump();
+    await _closeTargets(tester);
+    await _openTargets(tester, 'keywords-summary');
+    await _addTarget(tester, '  Casino ');
+    await _closeTargets(tester);
+    await tester.tap(find.byKey(const ValueKey('rule-save')));
+    await tester.pumpAndSettle();
+
+    final rule = ruleStore.rules.single;
+    expect(rule.name, 'instagram.com, casino');
+    expect(rule.packages, isEmpty);
+    expect(rule.websites, {'instagram.com'});
+    expect(rule.keywords, {'casino'});
+    expect(rulesChangedSignals, 1);
+  });
+
+  testWidgets('a website alone enables saving', (tester) async {
+    await _pumpEditor(tester, ruleStore, appService, permissionStatus);
+    FilledButton save() =>
+        tester.widget(find.byKey(const ValueKey('rule-save')));
+
+    expect(save().onPressed, isNull);
+    await _openTargets(tester, 'websites-summary');
+    await _addTarget(tester, 'instagram.com');
+    await _closeTargets(tester);
+    expect(save().onPressed, isNotNull);
+  });
+
+  testWidgets('web targets ask for accessibility until it is granted', (
+    tester,
+  ) async {
+    permissionStatus.accessibility = false;
+    await _pumpEditor(tester, ruleStore, appService, permissionStatus);
+    expect(find.byKey(const ValueKey('allow-accessibility')), findsNothing);
+
+    await _openTargets(tester, 'websites-summary');
+    await _addTarget(tester, 'instagram.com');
+    await _closeTargets(tester);
+    final allow = find.byKey(const ValueKey('allow-accessibility'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(allow);
+    await tester.pumpAndSettle();
+    await tester.tap(allow);
+    await tester.pumpAndSettle();
+
+    expect(permissionStatus.accessibilityRequests, 1);
+    expect(find.byKey(const ValueKey('allow-accessibility')), findsNothing);
+  });
+
+  testWidgets('limits explain that web targets are blocked all day', (
+    tester,
+  ) async {
+    const note =
+        'Websites and keywords are blocked all day, because browsing time '
+        'does not count towards the limit.';
+    await _pumpEditor(tester, ruleStore, appService, permissionStatus);
+    await _chooseTrigger(tester, 'Usage limit');
+    await _openTargets(tester, 'keywords-summary');
+    await _addTarget(tester, 'shorts');
+    await _closeTargets(tester);
+
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text(note),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(find.text(note), findsOneWidget);
+  });
+
+  testWidgets('the rule list summarises and keeps web targets', (tester) async {
+    ruleStore.rules.add(
+      _rule(
+        id: 15,
+        name: 'Web',
+        enabled: true,
+        websites: {'instagram.com'},
+        keywords: {'casino', 'bet'},
+      ),
+    );
+    await _pumpRules(tester, ruleStore, appService);
+    expect(find.textContaining('1 app · 1 site · 2 keywords'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('rule-enabled-15')));
+    await tester.pumpAndSettle();
+
+    expect(ruleStore.rules.single.enabled, isFalse);
+    expect(ruleStore.rules.single.websites, {'instagram.com'});
+    expect(ruleStore.rules.single.keywords, {'casino', 'bet'});
   });
 
   testWidgets('rule toggle persists the enabled state', (tester) async {
@@ -276,7 +384,13 @@ void main() {
       enabled: false,
     );
     ruleStore.rules.add(rule);
-    await _pumpEditor(tester, ruleStore, appService, rule: rule);
+    await _pumpEditor(
+      tester,
+      ruleStore,
+      appService,
+      permissionStatus,
+      rule: rule,
+    );
 
     await _openCondition(tester);
     expect(
@@ -319,7 +433,7 @@ void main() {
   testWidgets('invalid schedule input keeps the last valid time', (
     tester,
   ) async {
-    await _pumpEditor(tester, ruleStore, appService);
+    await _pumpEditor(tester, ruleStore, appService, permissionStatus);
     await _nameAndSelectAlpha(tester);
     await _openCondition(tester);
 
@@ -352,7 +466,8 @@ void main() {
 Future<void> _pumpEditor(
   WidgetTester tester,
   RuleStore ruleStore,
-  AppService appService, {
+  AppService appService,
+  PermissionStatus permissionStatus, {
   BlockRule? rule,
 }) async {
   await tester.pumpWidget(
@@ -360,6 +475,7 @@ Future<void> _pumpEditor(
       child: RuleEditorScreen(
         ruleStore: ruleStore,
         appService: appService,
+        permissionStatus: permissionStatus,
         rule: rule,
       ),
     ),
@@ -377,6 +493,30 @@ Future<void> _pumpRules(
       child: RulesScreen(ruleStore: ruleStore, appService: appService),
     ),
   );
+  await tester.pumpAndSettle();
+}
+
+Future<void> _openTargets(WidgetTester tester, String key) async {
+  final summary = find.byKey(ValueKey(key));
+  await tester.pumpAndSettle();
+  await tester.scrollUntilVisible(
+    summary,
+    180,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(summary);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _addTarget(WidgetTester tester, String text) async {
+  await tester.enterText(find.byKey(const ValueKey('web-target-input')), text);
+  await tester.tap(find.byKey(const ValueKey('web-target-add')));
+  await tester.pump();
+}
+
+Future<void> _closeTargets(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('web-target-done')));
   await tester.pumpAndSettle();
 }
 
@@ -398,6 +538,9 @@ Future<void> _selectApps(WidgetTester tester, List<String> packages) async {
 
 Future<void> _openApps(WidgetTester tester) async {
   final summary = find.byKey(const ValueKey('apps-summary'));
+  // Entering text starts a caret-reveal animation on the editor's list, which
+  // would undo the scroll below until it has settled.
+  await tester.pumpAndSettle();
   await tester.scrollUntilVisible(
     summary,
     180,
@@ -464,6 +607,8 @@ class FakeRuleStore extends RuleStore {
         id: id,
         name: rule.name,
         packages: rule.packages,
+        websites: rule.websites,
+        keywords: rule.keywords,
         trigger: rule.trigger,
         enabled: rule.enabled,
       ),
@@ -480,6 +625,30 @@ class FakeRuleStore extends RuleStore {
   @override
   Future<void> delete(int id) async {
     rules.removeWhere((rule) => rule.id == id);
+  }
+}
+
+class FakePermissionStatus extends PermissionStatus {
+  FakePermissionStatus({this.accessibility = true});
+
+  bool accessibility;
+  int accessibilityRequests = 0;
+
+  @override
+  Future<PermissionState> check() async => PermissionState(
+    usageAccess: true,
+    overlay: true,
+    notifications: true,
+    batteryOptimisation: true,
+    accessibility: accessibility,
+  );
+
+  @override
+  Future<void> request(RequiredPermission permission) async {
+    if (permission == RequiredPermission.accessibility) {
+      accessibilityRequests++;
+      accessibility = true;
+    }
   }
 }
 
@@ -503,11 +672,15 @@ BlockRule _rule({
   required int id,
   required String name,
   required bool enabled,
+  Set<String> websites = const {},
+  Set<String> keywords = const {},
 }) {
   return BlockRule(
     id: id,
     name: name,
     packages: const {'com.example.alpha'},
+    websites: websites,
+    keywords: keywords,
     trigger: const UsageQuota(Duration(minutes: 30)),
     enabled: enabled,
   );

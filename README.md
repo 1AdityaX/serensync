@@ -11,14 +11,18 @@ combines a quiet home screen with rules that interrupt distracting app use.
 - App launch, system app settings, and uninstall actions
 - Schedule limits, including overnight windows
 - Daily foreground-time and launch-count limits
+- Website and keyword blocking in supported browsers, read from the address
+  bar through an accessibility service
 - Enable, edit, and delete limits
-- Full-screen blocking overlay with a return-home action
-- Guided setup for usage access, overlays, notifications, and battery
-  optimisation
+- Full-screen blocking overlay with a return-home action for apps and a
+  go-back action for pages
+- Guided setup for usage access, overlays, notifications, battery
+  optimisation, and accessibility
 - Foreground blocking service that restarts after boot and app updates
 
-SerenSync deliberately has no accounts, analytics, backend, accessibility
-service, uninstall protection, or non-Android platform support.
+SerenSync deliberately has no accounts, analytics, backend, uninstall
+protection, or non-Android platform support. Browsing time is not measured,
+so usage and launch limits block their websites and keywords all day.
 
 ## Project layout
 
@@ -31,9 +35,13 @@ lib/
   settings/    settings navigation
 ```
 
-The main product logic lives in `lib/blocking/rule.dart`. It is pure Dart:
-plugins, Flutter APIs, and ambient clock access do not cross that boundary.
-Usage totals come from Android on demand and are never accumulated locally.
+The main product logic lives in `lib/main_app/blocking/rule.dart`. It is pure
+Dart: plugins, Flutter APIs, and ambient clock access do not cross that
+boundary. Usage totals come from Android on demand and are never accumulated
+locally. Supported browsers and their address-bar view ids live in
+`lib/main_app/blocking/browser_watcher.dart`; the accessibility service config
+in `android/app/src/main/res/xml/accessibilityservice.xml` lists the same
+packages, and a test keeps the two in sync.
 
 ## Run locally
 
@@ -68,5 +76,6 @@ recovery, and battery behavior still require a physical Android device.
 | `POST_NOTIFICATIONS` | Show the required foreground-service notification |
 | `RECEIVE_BOOT_COMPLETED` | Restart blocking after reboot |
 | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Reduce background process killing |
+| `BIND_ACCESSIBILITY_SERVICE` | Read the address bar of supported browsers for website and keyword blocks |
 
 Usage data stays on the device.

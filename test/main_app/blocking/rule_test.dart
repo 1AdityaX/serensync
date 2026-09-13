@@ -357,6 +357,144 @@ void main() {
     expect(decision, isA<Block>());
     expect((decision as Block).rule.id, 2);
   });
+
+  group('parseAddress', () {
+    test('normalises address-bar text to a host and url', () {
+      final address = parseAddress('https://www.Instagram.com/Reels?tab=1')!;
+
+      expect(address.host, 'instagram.com');
+      expect(address.url, 'instagram.com/reels?tab=1');
+    });
+
+    test('keeps subdomains, drops ports and credentials, decodes the url', () {
+      expect(parseAddress('m.youtube.com:443/shorts')!.host, 'm.youtube.com');
+      expect(parseAddress('user@example.org/x')!.host, 'example.org');
+      expect(
+        parseAddress('google.com/search?q=online%20casino')!.url,
+        'google.com/search?q=online casino',
+      );
+      expect(
+        parseAddress('google.com/search?q=online+casino')!.url,
+        'google.com/search?q=online casino',
+      );
+      expect(parseAddress('example.com/%zz')!.url, 'example.com/%zz');
+    });
+
+    test('rejects text that is not an address', () {
+      expect(parseAddress('Search or type URL'), isNull);
+      expect(parseAddress('play games now'), isNull);
+      expect(parseAddress('reddit'), isNull);
+      expect(parseAddress('http://'), isNull);
+      expect(parseAddress(''), isNull);
+    });
+  });
+
+  group('web decisions', () {
+    const rule = BlockRule(
+      id: 1,
+      name: 'Focus',
+      packages: {},
+      websites: {'instagram.com'},
+      keywords: {'casino'},
+      trigger: Schedule(
+        weekdays: {DateTime.monday},
+        startMinute: 9 * 60,
+        endMinute: 10 * 60,
+      ),
+      enabled: true,
+    );
+    final inSchedule = DateTime(2024, 1, 1, 9, 30);
+    final outsideSchedule = DateTime(2024, 1, 1, 12);
+
+    test('blocks a website and its subdomains during the schedule', () {
+      expect(_webDecision(rule, 'instagram.com', inSchedule), isA<Block>());
+      expect(
+        _webDecision(rule, 'https://www.instagram.com/reels', inSchedule),
+        isA<Block>(),
+      );
+      expect(_webDecision(rule, 'm.instagram.com', inSchedule), isA<Block>());
+      expect(_webDecision(rule, 'notinstagram.com', inSchedule), isA<Allow>());
+      expect(
+        _webDecision(rule, 'instagram.com', outsideSchedule),
+        isA<Allow>(),
+      );
+    });
+
+    test('blocks a keyword anywhere in the url', () {
+      const phrase = BlockRule(
+        id: 6,
+        name: 'Phrase',
+        packages: {},
+        keywords: {'online casino'},
+        trigger: LaunchQuota(1),
+        enabled: true,
+      );
+
+      expect(
+        _webDecision(rule, 'google.com/search?q=best+casino', inSchedule),
+        isA<Block>(),
+      );
+      expect(
+        _webDecision(phrase, 'bing.com/search?q=online+casino', inSchedule),
+        isA<Block>(),
+      );
+      expect(_webDecision(rule, 'bestcasino.net', inSchedule), isA<Block>());
+      expect(_webDecision(rule, 'example.com', inSchedule), isA<Allow>());
+    });
+
+    test('usage and launch limits block their web targets all day', () {
+      const usage = BlockRule(
+        id: 2,
+        name: 'Limit',
+        packages: {},
+        websites: {'reddit.com'},
+        trigger: UsageQuota(Duration(hours: 5)),
+        enabled: true,
+      );
+      const launches = BlockRule(
+        id: 3,
+        name: 'Opens',
+        packages: {},
+        keywords: {'shorts'},
+        trigger: LaunchQuota(99),
+        enabled: true,
+      );
+
+      expect(
+        _webDecision(usage, 'reddit.com/r/all', outsideSchedule),
+        isA<Block>(),
+      );
+      expect(
+        _webDecision(launches, 'youtube.com/shorts/x', outsideSchedule),
+        isA<Block>(),
+      );
+    });
+
+    test('disabled rules and app-only rules allow every page', () {
+      const disabled = BlockRule(
+        id: 4,
+        name: 'Off',
+        packages: {},
+        websites: {'instagram.com'},
+        trigger: UsageQuota(Duration.zero),
+        enabled: false,
+      );
+      const appsOnly = BlockRule(
+        id: 5,
+        name: 'Apps',
+        packages: {'com.instagram.android'},
+        trigger: UsageQuota(Duration.zero),
+        enabled: true,
+      );
+
+      expect(_webDecision(disabled, 'instagram.com', inSchedule), isA<Allow>());
+      expect(_webDecision(appsOnly, 'instagram.com', inSchedule), isA<Allow>());
+    });
+  });
+}
+
+Decision _webDecision(BlockRule rule, String address, DateTime now) {
+  return decideWeb(rules: [rule], address: parseAddress(address)!, now: now);
 }
 
 Decision _decisionFor(

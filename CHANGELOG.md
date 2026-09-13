@@ -11,6 +11,9 @@ and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Manual release workflow that builds a release APK and publishes a GitHub release.
 - Schedule, foreground-time, and launch-count app limits.
+- Website and keyword blocking in supported browsers, read from the address
+  bar through an accessibility service.
+- Accessibility permission in the setup flow and the block editor.
 - Rule persistence, editing, and enable/disable controls.
 - Permission setup and foreground blocking-service controls.
 - A blocking overlay with a return-home action.

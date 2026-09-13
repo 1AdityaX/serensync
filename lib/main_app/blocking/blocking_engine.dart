@@ -4,6 +4,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:usage_stats/usage_stats.dart';
 
 import 'block_overlay.dart';
+import 'browser_watcher.dart';
 import 'foreground_app.dart';
 import 'rule.dart';
 import 'rule_store.dart';
@@ -29,11 +30,34 @@ class BlockingEngine {
   final String ownPackage;
 
   List<BlockRule> _rules;
+  final Map<String, WebAddress> _addresses = <String, WebAddress>{};
+  Future<void> _queue = Future<void>.value();
   String? _previousPackage;
-  Decision? _previousDecision;
   bool? _screenInteractive;
 
-  Future<bool?> tick(DateTime now) async {
+  Future<bool?> tick(DateTime now) => _serialized(() => _tick(now));
+
+  /// Records what a browser shows and re-evaluates it while it is the
+  /// foreground app. Other browsers are evaluated once they come forward.
+  Future<void> addressChanged(BrowserAddress change, DateTime now) {
+    return _serialized(() async {
+      final address = change.address;
+      if (address == null) {
+        _addresses.remove(change.browser);
+      } else {
+        _addresses[change.browser] = address;
+      }
+      if (change.browser == _previousPackage && _screenInteractive != false) {
+        await _evaluate(change.browser, now);
+      }
+    });
+  }
+
+  void replaceRules(List<BlockRule> rules) {
+    _rules = List<BlockRule>.unmodifiable(rules);
+  }
+
+  Future<bool?> _tick(DateTime now) async {
     final foreground = await foregroundApp.foregroundState(now);
     if (!foreground.screenInteractive) {
       final screenTurnedOff = _screenInteractive != false;
@@ -56,39 +80,48 @@ class BlockingEngine {
     if (packageName != _previousPackage) {
       foregroundApp.invalidateUsage();
     }
+    _previousPackage = packageName;
     if (packageName == ownPackage) {
-      _remember(packageName, null);
       await overlay.hide();
-      return screenTurnedOn ? true : null;
+    } else {
+      await _evaluate(packageName, now);
     }
-    if (packageName == _previousPackage && _previousDecision is Allow) {
-      return screenTurnedOn ? true : null;
-    }
+    return screenTurnedOn ? true : null;
+  }
 
+  // Runs on every tick so a schedule or limit can start while the app stays
+  // open; the usage read behind it is cached by the foreground app.
+  Future<void> _evaluate(String packageName, DateTime now) async {
     final usage = await foregroundApp.todayUsage(packageName, now);
-    final decision = decide(
+    var decision = decide(
       rules: _rules,
       package: packageName,
       now: now,
       usage: usage,
     );
-    _remember(packageName, decision);
+    final address = _addresses[packageName];
+    WebAddress? blockedAddress;
+    if (decision is Allow && address != null) {
+      decision = decideWeb(rules: _rules, address: address, now: now);
+      if (decision is Block) blockedAddress = address;
+    }
     if (decision is Block) {
-      await overlay.show(packageName: packageName, rule: decision.rule);
+      await overlay.show(
+        packageName: packageName,
+        rule: decision.rule,
+        address: blockedAddress,
+      );
     } else {
       await overlay.hide();
     }
-    return screenTurnedOn ? true : null;
   }
 
-  void replaceRules(List<BlockRule> rules) {
-    _rules = List<BlockRule>.unmodifiable(rules);
-    _previousDecision = null;
-  }
-
-  void _remember(String packageName, Decision? decision) {
-    _previousPackage = packageName;
-    _previousDecision = decision;
+  // Ticks and address changes both drive the overlay, so they run one at a
+  // time to keep the last decision and the overlay in step.
+  Future<T> _serialized<T>(Future<T> Function() work) {
+    final result = _queue.then((_) => work());
+    _queue = result.then<void>((_) {}, onError: (Object _) {});
+    return result;
   }
 }
 
@@ -134,12 +167,18 @@ class BlockingService {
 }
 
 class BlockingTask extends TaskHandler {
-  BlockingTask({BlockingEngine? engine, RuleStore? ruleStore})
-    : _engine = engine ?? BlockingEngine(),
-      _ruleStore = ruleStore ?? RuleStore();
+  BlockingTask({
+    BlockingEngine? engine,
+    RuleStore? ruleStore,
+    BrowserWatcher? browserWatcher,
+  }) : _engine = engine ?? BlockingEngine(),
+       _ruleStore = ruleStore ?? RuleStore(),
+       _browserWatcher = browserWatcher ?? BrowserWatcher();
 
   final BlockingEngine _engine;
   final RuleStore _ruleStore;
+  final BrowserWatcher _browserWatcher;
+  StreamSubscription<BrowserAddress>? _addresses;
   bool _tickActive = false;
   Timer? _permissionCheck;
 
@@ -147,6 +186,9 @@ class BlockingTask extends TaskHandler {
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     await _reloadRules();
     if (!await _checkEnforcementPermissions()) return;
+    _addresses = _browserWatcher.addresses().listen(
+      (change) => unawaited(_engine.addressChanged(change, DateTime.now())),
+    );
     _permissionCheck = Timer.periodic(_permissionCheckInterval, (_) {
       unawaited(_checkEnforcementPermissions());
     });
@@ -169,6 +211,7 @@ class BlockingTask extends TaskHandler {
   @override
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
     _permissionCheck?.cancel();
+    await _addresses?.cancel();
     await _engine.overlay.hide();
     await _ruleStore.close();
   }

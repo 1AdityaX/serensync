@@ -46,6 +46,8 @@ class BlockRule {
   final int id;
   final String name;
   final Set<String> packages;
+  final Set<String> websites;
+  final Set<String> keywords;
   final Trigger trigger;
   final bool enabled;
 
@@ -53,10 +55,17 @@ class BlockRule {
     required this.id,
     required this.name,
     required this.packages,
+    this.websites = const {},
+    this.keywords = const {},
     required this.trigger,
     required this.enabled,
   });
+
+  bool get blocksWeb => websites.isNotEmpty || keywords.isNotEmpty;
 }
+
+/// What a browser's address bar shows, without scheme, `www.`, or port.
+typedef WebAddress = ({String host, String url});
 
 class AppUsage {
   final Duration foregroundTime;
@@ -102,6 +111,65 @@ Decision decide({
   }
 
   return const Allow();
+}
+
+Decision decideWeb({
+  required List<BlockRule> rules,
+  required WebAddress address,
+  required DateTime now,
+}) {
+  for (final rule in rules) {
+    if (!rule.enabled || !_matchesAddress(rule, address)) {
+      continue;
+    }
+
+    // Browsing time is not measured, so usage and launch limits block their
+    // websites and keywords outright.
+    final blocks = switch (rule.trigger) {
+      final Schedule schedule => _scheduleBlocks(schedule, now),
+      UsageQuota() || LaunchQuota() => true,
+    };
+
+    if (blocks) {
+      return Block(rule);
+    }
+  }
+
+  return const Allow();
+}
+
+final _scheme = RegExp(r'^[a-z][a-z0-9+.-]*://');
+final _pathStart = RegExp(r'[/?#]');
+final _host = RegExp(r'^[a-z0-9-]+(\.[a-z0-9-]+)+$');
+
+/// Parses address-bar text or a website entry. Returns null for text that is
+/// not a web address, such as a typed search or a browser's placeholder.
+WebAddress? parseAddress(String text) {
+  final address = text.trim().toLowerCase().replaceFirst(_scheme, '');
+  if (address.isEmpty || address.contains(' ')) return null;
+
+  final pathStart = address.indexOf(_pathStart);
+  var authority = pathStart == -1 ? address : address.substring(0, pathStart);
+  final path = pathStart == -1 ? '' : address.substring(pathStart);
+  authority = authority.substring(authority.indexOf('@') + 1);
+  final port = authority.indexOf(':');
+  if (port != -1) authority = authority.substring(0, port);
+  final host = authority.startsWith('www.')
+      ? authority.substring(4)
+      : authority;
+  if (!_host.hasMatch(host)) return null;
+
+  return (host: host, url: _decode('$host$path'));
+}
+
+// Search engines encode query spaces as '+', which decodeFull leaves alone.
+String _decode(String url) {
+  final spaced = url.replaceAll('+', ' ');
+  try {
+    return Uri.decodeFull(spaced);
+  } on ArgumentError {
+    return spaced;
+  }
 }
 
 String triggerSummary(Trigger trigger) {
@@ -151,6 +219,13 @@ String ruleDuration(Duration duration) {
   if (hours == 0) return '${duration.inMinutes}m';
   if (minutes == 0) return '${hours}h';
   return '${hours}h ${minutes}m';
+}
+
+bool _matchesAddress(BlockRule rule, WebAddress address) {
+  return rule.websites.any(
+        (site) => address.host == site || address.host.endsWith('.$site'),
+      ) ||
+      rule.keywords.any(address.url.contains);
 }
 
 bool _scheduleBlocks(Schedule schedule, DateTime now) {

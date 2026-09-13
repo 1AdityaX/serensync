@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_accessibility_service/constants.dart';
+import 'package:flutter_accessibility_service/flutter_accessibility_service.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 
@@ -25,15 +27,21 @@ class BlockOverlay {
   final Future<void> Function() _closeOverlay;
   final void Function() _launchApp;
   String? _visiblePackage;
+  String? _visibleHost;
   BlockRule? _visibleRule;
 
+  /// Shows the block screen for [rule] over [packageName]. Pass [address]
+  /// when a page inside the app is what the rule blocks.
   Future<void> show({
     required String packageName,
     required BlockRule rule,
+    WebAddress? address,
   }) async {
+    final host = address?.host ?? '';
     final active = await _isActive();
     if (active &&
         packageName == _visiblePackage &&
+        host == _visibleHost &&
         identical(rule, _visibleRule)) {
       return;
     }
@@ -48,8 +56,10 @@ class BlockOverlay {
     await _shareData(<String, String>{
       'packageName': packageName,
       'ruleName': rule.name,
+      'host': host,
     });
     _visiblePackage = packageName;
+    _visibleHost = host;
     _visibleRule = rule;
   }
 
@@ -67,6 +77,7 @@ class BlockOverlay {
 
   Future<void> hide() async {
     _visiblePackage = null;
+    _visibleHost = null;
     _visibleRule = null;
     if (await _isActive()) {
       await _closeOverlay();
@@ -106,6 +117,7 @@ class _BlockScreen extends StatefulWidget {
 class _BlockScreenState extends State<_BlockScreen> {
   StreamSubscription<Object?>? _messages;
   String _packageName = '';
+  String _host = '';
   String _ruleName = 'A blocking rule';
 
   @override
@@ -125,21 +137,30 @@ class _BlockScreenState extends State<_BlockScreen> {
     if (message case {
       'packageName': final String packageName,
       'ruleName': final String ruleName,
+      'host': final String host,
     }) {
       setState(() {
         _packageName = packageName;
         _ruleName = ruleName;
+        _host = host;
       });
     }
   }
 
-  Future<void> _returnHome() async {
+  Future<void> _leave() async {
     await FlutterOverlayWindow.closeOverlay();
-    FlutterForegroundTask.launchApp();
+    if (_host.isEmpty) {
+      FlutterForegroundTask.launchApp();
+    } else {
+      await FlutterAccessibilityService.performGlobalAction(
+        GlobalAction.globalActionBack,
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final subject = _host.isEmpty ? _packageName : _host;
     return Material(
       color: const Color(0xff12130f),
       child: SafeArea(
@@ -163,10 +184,10 @@ class _BlockScreenState extends State<_BlockScreen> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              if (_packageName.isNotEmpty) ...[
+              if (subject.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Text(
-                  _packageName,
+                  subject,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Color(0xffa9ad9f),
@@ -176,8 +197,8 @@ class _BlockScreenState extends State<_BlockScreen> {
               ],
               const SizedBox(height: 32),
               FilledButton(
-                onPressed: _returnHome,
-                child: const Text('Return home'),
+                onPressed: _leave,
+                child: Text(_host.isEmpty ? 'Return home' : 'Go back'),
               ),
             ],
           ),

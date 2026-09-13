@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">Reads the address bar of supported browsers so SerenSync can block the websites and keywords in your blocks. Browsing data stays on the device.</string>
+</resources>

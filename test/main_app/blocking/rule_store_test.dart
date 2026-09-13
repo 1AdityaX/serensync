@@ -46,6 +46,8 @@ void main() {
         id: 91,
         name: 'Social limit',
         packages: {},
+        websites: {'instagram.com', 'reddit.com'},
+        keywords: {'casino'},
         trigger: UsageQuota(Duration(minutes: 37, microseconds: 12)),
         enabled: false,
       ),
@@ -109,12 +111,14 @@ void main() {
     }
   });
 
-  test('update replaces the package set and stored fields', () async {
+  test('update replaces every target set and stored field', () async {
     final id = await store.insert(
       const BlockRule(
         id: 0,
         name: 'Before',
         packages: {'com.example.one', 'com.example.two'},
+        websites: {'old.example'},
+        keywords: {'old'},
         trigger: LaunchQuota(2),
         enabled: true,
       ),
@@ -123,6 +127,8 @@ void main() {
       id: id,
       name: 'After',
       packages: const {'com.example.three', 'com.example.four'},
+      websites: const {'new.example'},
+      keywords: const {'new', 'newer'},
       trigger: const UsageQuota(Duration(hours: 1)),
       enabled: false,
     );
@@ -134,7 +140,75 @@ void main() {
     _expectRule(stored.single, replacement, expectedId: id);
   });
 
-  test('delete cascades to package rows', () async {
+  test('upgrades a version 1 database', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'serensync_upgrade_test.',
+    );
+    final path = '${directory.path}/rules.db';
+    try {
+      final legacy = await databaseFactoryFfi.openDatabase(
+        path,
+        options: OpenDatabaseOptions(
+          version: 1,
+          onCreate: (database, _) async {
+            await database.execute(
+              'CREATE TABLE rules (id INTEGER PRIMARY KEY AUTOINCREMENT, '
+              'name TEXT NOT NULL, enabled INTEGER NOT NULL, '
+              'trigger_type TEXT NOT NULL, trigger_json TEXT NOT NULL)',
+            );
+            await database.execute(
+              'CREATE TABLE rule_packages (rule_id INTEGER NOT NULL '
+              'REFERENCES rules(id) ON DELETE CASCADE, package TEXT NOT NULL, '
+              'PRIMARY KEY (rule_id, package))',
+            );
+          },
+        ),
+      );
+      try {
+        final id = await legacy.insert('rules', <String, Object?>{
+          'name': 'Legacy',
+          'enabled': 1,
+          'trigger_type': 'launch_quota',
+          'trigger_json': '{"limit":3}',
+        });
+        await legacy.insert('rule_packages', <String, Object?>{
+          'rule_id': id,
+          'package': 'com.example.legacy',
+        });
+      } finally {
+        await legacy.close();
+      }
+
+      final upgraded = RuleStore(databasePath: path);
+      try {
+        final legacyRule = (await upgraded.readAll()).single;
+        expect(legacyRule.packages, {'com.example.legacy'});
+        expect(legacyRule.websites, isEmpty);
+        expect(legacyRule.keywords, isEmpty);
+
+        await upgraded.insert(
+          const BlockRule(
+            id: 0,
+            name: 'Web',
+            packages: {},
+            websites: {'example.com'},
+            keywords: {'game'},
+            trigger: LaunchQuota(1),
+            enabled: true,
+          ),
+        );
+        final stored = await upgraded.readAll();
+        expect(stored.last.websites, {'example.com'});
+        expect(stored.last.keywords, {'game'});
+      } finally {
+        await upgraded.close();
+      }
+    } finally {
+      await directory.delete(recursive: true);
+    }
+  });
+
+  test('delete cascades to every target row', () async {
     final directory = await Directory.systemTemp.createTemp(
       'serensync_rule_store_test.',
     );
@@ -146,6 +220,8 @@ void main() {
           id: 0,
           name: 'Temporary',
           packages: {'com.example.one', 'com.example.two'},
+          websites: {'example.com'},
+          keywords: {'game'},
           trigger: LaunchQuota(1),
           enabled: true,
         ),
@@ -156,6 +232,8 @@ void main() {
       final database = await databaseFactoryFfi.openDatabase(path);
       try {
         expect(await database.query('rule_packages'), isEmpty);
+        expect(await database.query('rule_websites'), isEmpty);
+        expect(await database.query('rule_keywords'), isEmpty);
       } finally {
         await database.close();
       }
@@ -229,6 +307,8 @@ void _expectRule(
   expect(actual.id, expectedId);
   expect(actual.name, expected.name);
   expect(actual.packages, unorderedEquals(expected.packages));
+  expect(actual.websites, unorderedEquals(expected.websites));
+  expect(actual.keywords, unorderedEquals(expected.keywords));
   expect(actual.enabled, expected.enabled);
   _expectTrigger(actual.trigger, expected.trigger);
 }

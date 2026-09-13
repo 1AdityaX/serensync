@@ -8,52 +8,35 @@ class RuleStore {
   RuleStore({this.databasePath});
 
   static const _databaseName = 'serensync.db';
-  static const _schemaVersion = 1;
+  static const _schemaVersion = 2;
 
   final String? databasePath;
   Future<Database>? _database;
 
   Future<List<BlockRule>> readAll() async {
     final database = await _getDatabase();
-    final rows = await database.rawQuery('''
-      SELECT
-        rules.id,
-        rules.name,
-        rules.enabled,
-        rules.trigger_type,
-        rules.trigger_json,
-        rule_packages.package
-      FROM rules
-      LEFT JOIN rule_packages ON rule_packages.rule_id = rules.id
-      ORDER BY rules.id ASC
-    ''');
+    final rows = await database.query('rules', orderBy: 'id ASC');
+    final packages = await _readTargets(database, 'rule_packages', 'package');
+    final websites = await _readTargets(database, 'rule_websites', 'website');
+    final keywords = await _readTargets(database, 'rule_keywords', 'keyword');
 
     final rules = <BlockRule>[];
-    int? currentId;
-    late Set<String> packages;
     for (final row in rows) {
       final id = row['id'] as int;
-      if (id != currentId) {
-        packages = <String>{};
-        rules.add(
-          BlockRule(
-            id: id,
-            name: row['name'] as String,
-            packages: packages,
-            trigger: _decodeTrigger(
-              row['trigger_type'] as String,
-              row['trigger_json'] as String,
-            ),
-            enabled: (row['enabled'] as int) == 1,
+      rules.add(
+        BlockRule(
+          id: id,
+          name: row['name'] as String,
+          packages: packages[id] ?? <String>{},
+          websites: websites[id] ?? <String>{},
+          keywords: keywords[id] ?? <String>{},
+          trigger: _decodeTrigger(
+            row['trigger_type'] as String,
+            row['trigger_json'] as String,
           ),
-        );
-        currentId = id;
-      }
-
-      final package = row['package'] as String?;
-      if (package != null) {
-        packages.add(package);
-      }
+          enabled: (row['enabled'] as int) == 1,
+        ),
+      );
     }
     return rules;
   }
@@ -62,7 +45,7 @@ class RuleStore {
     final database = await _getDatabase();
     return database.transaction((transaction) async {
       final id = await transaction.insert('rules', _ruleValues(rule));
-      await _insertPackages(transaction, id, rule.packages);
+      await _insertTargets(transaction, id, rule);
       return id;
     });
   }
@@ -76,12 +59,14 @@ class RuleStore {
         where: 'id = ?',
         whereArgs: <Object?>[rule.id],
       );
-      await transaction.delete(
-        'rule_packages',
-        where: 'rule_id = ?',
-        whereArgs: <Object?>[rule.id],
-      );
-      await _insertPackages(transaction, rule.id, rule.packages);
+      for (final table in _targetTables) {
+        await transaction.delete(
+          table,
+          where: 'rule_id = ?',
+          whereArgs: <Object?>[rule.id],
+        );
+      }
+      await _insertTargets(transaction, rule.id, rule);
     });
   }
 
@@ -116,6 +101,8 @@ class RuleStore {
   }
 }
 
+const _targetTables = ['rule_packages', 'rule_websites', 'rule_keywords'];
+
 Future<void> _migrate(Database database, int oldVersion, int newVersion) async {
   if (oldVersion < 1) {
     await database.execute('''
@@ -127,14 +114,40 @@ Future<void> _migrate(Database database, int oldVersion, int newVersion) async {
         trigger_json  TEXT    NOT NULL
       )
     ''');
-    await database.execute('''
-      CREATE TABLE rule_packages (
-        rule_id  INTEGER NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
-        package  TEXT    NOT NULL,
-        PRIMARY KEY (rule_id, package)
-      )
-    ''');
+    await _createTargetTable(database, 'rule_packages', 'package');
   }
+  if (oldVersion < 2) {
+    await _createTargetTable(database, 'rule_websites', 'website');
+    await _createTargetTable(database, 'rule_keywords', 'keyword');
+  }
+}
+
+Future<void> _createTargetTable(
+  Database database,
+  String table,
+  String column,
+) {
+  return database.execute('''
+    CREATE TABLE $table (
+      rule_id  INTEGER NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
+      $column  TEXT    NOT NULL,
+      PRIMARY KEY (rule_id, $column)
+    )
+  ''');
+}
+
+Future<Map<int, Set<String>>> _readTargets(
+  Database database,
+  String table,
+  String column,
+) async {
+  final targets = <int, Set<String>>{};
+  for (final row in await database.query(table)) {
+    targets
+        .putIfAbsent(row['rule_id'] as int, () => <String>{})
+        .add(row[column] as String);
+  }
+  return targets;
 }
 
 Map<String, Object?> _ruleValues(BlockRule rule) {
@@ -147,15 +160,45 @@ Map<String, Object?> _ruleValues(BlockRule rule) {
   };
 }
 
-Future<void> _insertPackages(
+Future<void> _insertTargets(
   DatabaseExecutor database,
   int ruleId,
-  Set<String> packages,
+  BlockRule rule,
 ) async {
-  for (final package in packages) {
-    await database.insert('rule_packages', <String, Object?>{
+  await _insertValues(
+    database,
+    'rule_packages',
+    'package',
+    ruleId,
+    rule.packages,
+  );
+  await _insertValues(
+    database,
+    'rule_websites',
+    'website',
+    ruleId,
+    rule.websites,
+  );
+  await _insertValues(
+    database,
+    'rule_keywords',
+    'keyword',
+    ruleId,
+    rule.keywords,
+  );
+}
+
+Future<void> _insertValues(
+  DatabaseExecutor database,
+  String table,
+  String column,
+  int ruleId,
+  Set<String> values,
+) async {
+  for (final value in values) {
+    await database.insert(table, <String, Object?>{
       'rule_id': ruleId,
-      'package': package,
+      column: value,
     });
   }
 }

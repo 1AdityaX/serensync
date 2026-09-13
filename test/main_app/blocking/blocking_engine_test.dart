@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serensync/main_app/blocking/block_overlay.dart';
 import 'package:serensync/main_app/blocking/blocking_engine.dart';
+import 'package:serensync/main_app/blocking/browser_watcher.dart';
 import 'package:serensync/main_app/blocking/foreground_app.dart';
 import 'package:serensync/main_app/blocking/rule.dart';
 
@@ -8,12 +11,22 @@ void main() {
   const blockedPackage = 'com.example.blocked';
   const otherPackage = 'com.example.other';
   const ownPackage = 'com.example.serensync';
+  const browser = 'com.android.chrome';
   final now = DateTime(2026, 7, 27, 12);
   const blockingRule = BlockRule(
     id: 1,
     name: 'One launch',
     packages: <String>{blockedPackage, otherPackage},
     trigger: LaunchQuota(1),
+    enabled: true,
+  );
+  const webRule = BlockRule(
+    id: 3,
+    name: 'No Reels',
+    packages: <String>{},
+    websites: <String>{'instagram.com'},
+    keywords: <String>{'casino'},
+    trigger: UsageQuota(Duration(hours: 9)),
     enabled: true,
   );
 
@@ -33,6 +46,7 @@ void main() {
 
     expect(overlay.visible, isTrue);
     expect(overlay.packageName, blockedPackage);
+    expect(overlay.host, isNull);
     expect(overlay.ruleName, 'One launch');
   });
 
@@ -77,39 +91,66 @@ void main() {
     expect(shares, 1);
   });
 
-  test('changing the blocked package or rule updates the overlay', () async {
-    var active = false;
-    final data = <Map<String, String>>[];
-    const otherRule = BlockRule(
-      id: 2,
-      name: 'Different rule',
-      packages: <String>{otherPackage},
-      trigger: LaunchQuota(1),
-      enabled: true,
-    );
-    final overlay = BlockOverlay(
-      isActive: () async => active,
-      showOverlay: (String _) async {
-        active = true;
-      },
-      shareData: (Map<String, String> value) async {
-        data.add(value);
-      },
-    );
+  test(
+    'changing the blocked package, page, or rule updates the overlay',
+    () async {
+      var active = false;
+      final data = <Map<String, String>>[];
+      const otherRule = BlockRule(
+        id: 2,
+        name: 'Different rule',
+        packages: <String>{otherPackage},
+        trigger: LaunchQuota(1),
+        enabled: true,
+      );
+      final overlay = BlockOverlay(
+        isActive: () async => active,
+        showOverlay: (String _) async {
+          active = true;
+        },
+        shareData: (Map<String, String> value) async {
+          data.add(value);
+        },
+      );
 
-    await overlay.show(packageName: blockedPackage, rule: blockingRule);
-    await overlay.show(packageName: otherPackage, rule: blockingRule);
-    await overlay.show(packageName: otherPackage, rule: otherRule);
+      await overlay.show(packageName: blockedPackage, rule: blockingRule);
+      await overlay.show(packageName: otherPackage, rule: blockingRule);
+      await overlay.show(packageName: otherPackage, rule: otherRule);
+      await overlay.show(
+        packageName: browser,
+        rule: webRule,
+        address: parseAddress('instagram.com/reels'),
+      );
+      await overlay.show(
+        packageName: browser,
+        rule: webRule,
+        address: parseAddress('instagram.com/explore'),
+      );
 
-    expect(data, <Map<String, String>>[
-      <String, String>{'packageName': blockedPackage, 'ruleName': 'One launch'},
-      <String, String>{'packageName': otherPackage, 'ruleName': 'One launch'},
-      <String, String>{
-        'packageName': otherPackage,
-        'ruleName': 'Different rule',
-      },
-    ]);
-  });
+      expect(data, <Map<String, String>>[
+        <String, String>{
+          'packageName': blockedPackage,
+          'ruleName': 'One launch',
+          'host': '',
+        },
+        <String, String>{
+          'packageName': otherPackage,
+          'ruleName': 'One launch',
+          'host': '',
+        },
+        <String, String>{
+          'packageName': otherPackage,
+          'ruleName': 'Different rule',
+          'host': '',
+        },
+        <String, String>{
+          'packageName': browser,
+          'ruleName': 'No Reels',
+          'host': 'instagram.com',
+        },
+      ]);
+    },
+  );
 
   test('hiding an overlay closes it', () async {
     var closes = 0;
@@ -164,21 +205,32 @@ void main() {
     expect(foreground.usageReads, 0);
   });
 
-  test('staying in one allowed app does not re-query usage', () async {
-    final foreground = FakeForegroundApp(
-      packageName: blockedPackage,
-      usage: const AppUsage(foregroundTime: Duration.zero, launches: 0),
+  test('an open app is blocked once its schedule starts', () async {
+    const scheduleRule = BlockRule(
+      id: 2,
+      name: 'Lunch break',
+      packages: <String>{blockedPackage},
+      trigger: Schedule(
+        weekdays: <int>{DateTime.monday},
+        startMinute: 12 * 60,
+        endMinute: 13 * 60,
+      ),
+      enabled: true,
     );
+    final foreground = FakeForegroundApp(packageName: blockedPackage);
+    final overlay = FakeBlockOverlay();
     final engine = BlockingEngine(
       foregroundApp: foreground,
-      overlay: FakeBlockOverlay(),
-      rules: const <BlockRule>[blockingRule],
+      overlay: overlay,
+      rules: const <BlockRule>[scheduleRule],
     );
 
-    await engine.tick(now);
-    await engine.tick(now.add(const Duration(seconds: 1)));
+    await engine.tick(now.subtract(const Duration(minutes: 1)));
+    expect(overlay.visible, isFalse);
 
-    expect(foreground.usageReads, 1);
+    await engine.tick(now);
+
+    expect(overlay.visible, isTrue);
   });
 
   test('a null foreground package only hides the overlay', () async {
@@ -274,6 +326,145 @@ void main() {
 
     expect(overlay.visible, isTrue);
   });
+
+  group('web pages', () {
+    test('a blocked page in the foreground browser shows its host', () async {
+      final foreground = FakeForegroundApp(packageName: browser);
+      final overlay = FakeBlockOverlay();
+      final engine = BlockingEngine(
+        foregroundApp: foreground,
+        overlay: overlay,
+        rules: const <BlockRule>[webRule],
+      );
+      await engine.tick(now);
+      expect(overlay.visible, isFalse);
+
+      await engine.addressChanged(_page(browser, 'instagram.com/reels'), now);
+
+      expect(overlay.visible, isTrue);
+      expect(overlay.packageName, browser);
+      expect(overlay.host, 'instagram.com');
+      expect(overlay.ruleName, 'No Reels');
+    });
+
+    test('leaving the page or opening a new tab hides the overlay', () async {
+      final foreground = FakeForegroundApp(packageName: browser);
+      final overlay = FakeBlockOverlay();
+      final engine = BlockingEngine(
+        foregroundApp: foreground,
+        overlay: overlay,
+        rules: const <BlockRule>[webRule],
+      );
+      await engine.tick(now);
+
+      await engine.addressChanged(_page(browser, 'bestcasino.net'), now);
+      expect(overlay.visible, isTrue);
+      await engine.addressChanged(_page(browser, 'example.com'), now);
+      expect(overlay.visible, isFalse);
+
+      await engine.addressChanged(_page(browser, 'instagram.com'), now);
+      expect(overlay.visible, isTrue);
+      await engine.addressChanged((browser: browser, address: null), now);
+      expect(overlay.visible, isFalse);
+    });
+
+    test('a browser coming forward is checked against its last page', () async {
+      final foreground = FakeForegroundApp(packageName: otherPackage);
+      final overlay = FakeBlockOverlay();
+      final engine = BlockingEngine(
+        foregroundApp: foreground,
+        overlay: overlay,
+        rules: const <BlockRule>[webRule],
+      );
+      await engine.tick(now);
+
+      await engine.addressChanged(_page(browser, 'instagram.com'), now);
+      expect(overlay.visible, isFalse);
+
+      foreground.packageName = browser;
+      await engine.tick(now.add(const Duration(seconds: 1)));
+
+      expect(overlay.visible, isTrue);
+      expect(overlay.host, 'instagram.com');
+    });
+
+    test('an app rule takes precedence over the page', () async {
+      const browserRule = BlockRule(
+        id: 4,
+        name: 'No browsing',
+        packages: <String>{browser},
+        trigger: LaunchQuota(1),
+        enabled: true,
+      );
+      final foreground = FakeForegroundApp(
+        packageName: browser,
+        usage: const AppUsage(foregroundTime: Duration.zero, launches: 1),
+      );
+      final overlay = FakeBlockOverlay();
+      final engine = BlockingEngine(
+        foregroundApp: foreground,
+        overlay: overlay,
+        rules: const <BlockRule>[webRule, browserRule],
+      );
+
+      await engine.addressChanged(_page(browser, 'instagram.com'), now);
+      await engine.tick(now);
+
+      expect(overlay.visible, isTrue);
+      expect(overlay.ruleName, 'No browsing');
+      expect(overlay.host, isNull);
+    });
+
+    test('address changes are ignored while the screen is off', () async {
+      final foreground = FakeForegroundApp(
+        packageName: browser,
+        screenInteractive: false,
+        failOnUsageRead: true,
+      );
+      final overlay = FakeBlockOverlay();
+      final engine = BlockingEngine(
+        foregroundApp: foreground,
+        overlay: overlay,
+        rules: const <BlockRule>[webRule],
+      );
+      await engine.tick(now);
+
+      await engine.addressChanged(_page(browser, 'instagram.com'), now);
+
+      expect(overlay.visible, isFalse);
+    });
+
+    test('ticks and address changes run one at a time', () async {
+      final gate = Completer<void>();
+      final foreground = FakeForegroundApp(packageName: browser)
+        ..stateGate = gate.future;
+      final overlay = FakeBlockOverlay();
+      final engine = BlockingEngine(
+        foregroundApp: foreground,
+        overlay: overlay,
+        rules: const <BlockRule>[webRule],
+      );
+
+      final tick = engine.tick(now);
+      var addressHandled = false;
+      final change = engine
+          .addressChanged(_page(browser, 'instagram.com'), now)
+          .then((_) => addressHandled = true);
+      await pumpEventQueue();
+      expect(addressHandled, isFalse);
+
+      gate.complete();
+      await tick;
+      await change;
+
+      expect(overlay.visible, isTrue);
+      expect(overlay.host, 'instagram.com');
+    });
+  });
+}
+
+BrowserAddress _page(String browser, String address) {
+  return (browser: browser, address: parseAddress(address)!);
 }
 
 class FakeForegroundApp extends ForegroundApp {
@@ -288,10 +479,12 @@ class FakeForegroundApp extends ForegroundApp {
   bool screenInteractive;
   AppUsage usage;
   final bool failOnUsageRead;
+  Future<void>? stateGate;
   int usageReads = 0;
 
   @override
   Future<ForegroundState> foregroundState(DateTime now) async {
+    await stateGate;
     return (packageName: packageName, screenInteractive: screenInteractive);
   }
 
@@ -308,6 +501,7 @@ class FakeForegroundApp extends ForegroundApp {
 class FakeBlockOverlay extends BlockOverlay {
   bool visible = false;
   String? packageName;
+  String? host;
   String? ruleName;
   int showCalls = 0;
   int hideCalls = 0;
@@ -316,10 +510,12 @@ class FakeBlockOverlay extends BlockOverlay {
   Future<void> show({
     required String packageName,
     required BlockRule rule,
+    WebAddress? address,
   }) async {
     showCalls++;
     visible = true;
     this.packageName = packageName;
+    host = address?.host;
     ruleName = rule.name;
   }
 
@@ -328,6 +524,7 @@ class FakeBlockOverlay extends BlockOverlay {
     hideCalls++;
     visible = false;
     packageName = null;
+    host = null;
     ruleName = null;
   }
 }

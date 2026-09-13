@@ -17,6 +17,7 @@ void main() {
         overlay: false,
         notifications: true,
         batteryOptimisation: false,
+        accessibility: false,
       ),
     );
     await _pump(tester, permissionStatus: permissionStatus);
@@ -25,12 +26,14 @@ void main() {
     expect(find.text('Display over other apps'), findsOneWidget);
     expect(find.text('Notifications'), findsOneWidget);
     expect(find.text('Battery optimisation'), findsOneWidget);
+    expect(find.text('Accessibility'), findsOneWidget);
     expect(find.text('Granted'), findsNWidgets(2));
     expect(find.byKey(const ValueKey('grant-overlay')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('grant-batteryOptimisation')),
       findsOneWidget,
     );
+    expect(find.byKey(const ValueKey('grant-accessibility')), findsOneWidget);
   });
 
   testWidgets('returning to the app rechecks permission state', (tester) async {
@@ -40,22 +43,18 @@ void main() {
         overlay: true,
         notifications: true,
         batteryOptimisation: true,
+        accessibility: true,
       ),
     );
     await _pump(tester, permissionStatus: permissionStatus);
     expect(find.byKey(const ValueKey('grant-usageAccess')), findsOneWidget);
 
-    permissionStatus.state = const PermissionState(
-      usageAccess: true,
-      overlay: true,
-      notifications: true,
-      batteryOptimisation: true,
-    );
+    permissionStatus.state = _grantedPermissions;
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pump();
 
     expect(find.byKey(const ValueKey('grant-usageAccess')), findsNothing);
-    expect(find.text('Granted'), findsNWidgets(4));
+    expect(find.text('Granted'), findsNWidgets(5));
   });
 
   testWidgets('blocking stays off while a permission is missing', (
@@ -70,6 +69,7 @@ void main() {
           overlay: false,
           notifications: true,
           batteryOptimisation: true,
+          accessibility: true,
         ),
       ),
       rules: <BlockRule>[_rule()],
@@ -109,8 +109,7 @@ void main() {
     );
 
     expect(find.text('Blocking is on'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('blocking-toggle')));
-    await tester.pump();
+    await _tapToggle(tester);
 
     expect(service.running, isFalse);
     expect(find.text('Blocking is off'), findsOneWidget);
@@ -133,6 +132,7 @@ void main() {
         overlay: true,
         notifications: true,
         batteryOptimisation: true,
+        accessibility: true,
       );
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pump();
@@ -145,6 +145,57 @@ void main() {
     },
   );
 
+  testWidgets('web blocks ask for accessibility without stopping enforcement', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      permissionStatus: FakePermissionStatus(
+        const PermissionState(
+          usageAccess: true,
+          overlay: true,
+          notifications: true,
+          batteryOptimisation: true,
+          accessibility: false,
+        ),
+      ),
+      rules: <BlockRule>[
+        _rule(websites: <String>{'instagram.com'}),
+      ],
+      service: FakeBlockingService(running: true),
+    );
+
+    expect(find.text('Blocking is on'), findsOneWidget);
+    expect(
+      find.text(
+        'SerenSync is enforcing your enabled rules. Allow accessibility to '
+        'block websites and keywords too.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('app-only blocks can start without accessibility', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      permissionStatus: FakePermissionStatus(
+        const PermissionState(
+          usageAccess: true,
+          overlay: true,
+          notifications: true,
+          batteryOptimisation: true,
+          accessibility: false,
+        ),
+      ),
+      rules: <BlockRule>[_rule()],
+    );
+
+    expect(find.text('Blocking is off'), findsOneWidget);
+    expect(_toggle(tester).onPressed, isNotNull);
+  });
+
   testWidgets('a service start failure is shown to the user', (tester) async {
     final service = FakeBlockingService(
       startResult: ServiceRequestFailure(error: StateError('not allowed')),
@@ -156,8 +207,7 @@ void main() {
       service: service,
     );
 
-    await tester.tap(find.byKey(const ValueKey('blocking-toggle')));
-    await tester.pump();
+    await _tapToggle(tester);
 
     expect(
       find.text('Unable to start blocking: Bad state: not allowed'),
@@ -172,6 +222,7 @@ const _grantedPermissions = PermissionState(
   overlay: true,
   notifications: true,
   batteryOptimisation: true,
+  accessibility: true,
 );
 
 Future<void> _pump(
@@ -198,11 +249,20 @@ TextButton _toggle(WidgetTester tester) {
   );
 }
 
-BlockRule _rule({bool enabled = true}) {
+Future<void> _tapToggle(WidgetTester tester) async {
+  final toggle = find.byKey(const ValueKey('blocking-toggle'));
+  await tester.ensureVisible(toggle);
+  await tester.pumpAndSettle();
+  await tester.tap(toggle);
+  await tester.pump();
+}
+
+BlockRule _rule({bool enabled = true, Set<String> websites = const {}}) {
   return BlockRule(
     id: 1,
     name: 'Focus',
     packages: const <String>{'com.example.app'},
+    websites: websites,
     trigger: const LaunchQuota(1),
     enabled: enabled,
   );

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:serensync/main_app/blocking/blocking_engine.dart';
 import 'package:serensync/main_app/stats/usage_report.dart';
 
 const _resumed = 1;
@@ -102,6 +103,18 @@ void main() {
 
     expect(report.opens, 1);
     expect(report.total, const Duration(minutes: 30));
+  });
+
+  test('leaves SerenSync out while it ends the session before it', () {
+    final report = _summarize([
+      _event('chat', _resumed, _at(8)),
+      _event(applicationId, _resumed, _at(8, 20)),
+      _event(applicationId, _paused, _at(8, 40)),
+    ]);
+
+    expect(report.total, const Duration(minutes: 20));
+    expect(report.opens, 1);
+    expect(report.apps.single.packageName, 'chat');
   });
 
   test('reads events in any order', () {

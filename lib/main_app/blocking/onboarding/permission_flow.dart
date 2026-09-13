@@ -27,6 +27,7 @@ class _PermissionFlowState extends State<PermissionFlow>
     with WidgetsBindingObserver {
   PermissionState? _permissions;
   bool _hasEnabledRule = false;
+  bool _needsAccessibility = false;
   bool _serviceRunning = false;
   String? _startError;
 
@@ -50,6 +51,7 @@ class _PermissionFlowState extends State<PermissionFlow>
     setState(() {
       _permissions = permissions;
       _hasEnabledRule = rules.any((rule) => rule.enabled);
+      _needsAccessibility = rules.any((rule) => rule.enabled && rule.blocksWeb);
       _serviceRunning = serviceRunning;
     });
   }
@@ -110,6 +112,7 @@ class _PermissionFlowState extends State<PermissionFlow>
                 _BlockingControl(
                   permissions: permissions,
                   hasEnabledRule: _hasEnabledRule,
+                  needsAccessibility: _needsAccessibility,
                   running: _serviceRunning,
                   startError: _startError,
                   onStart: _start,
@@ -151,6 +154,13 @@ class _PermissionTile extends StatelessWidget {
         title: 'Battery optimisation',
         reason: 'Keep blocking active when Android saves battery.',
       ),
+      RequiredPermission.accessibility => (
+        title: 'Accessibility',
+        reason:
+            'Read the browser address bar to block websites and keywords. '
+            'If Android greys the switch out, allow restricted settings '
+            'from App info first.',
+      ),
     };
     return ListTile(
       title: Text(details.title),
@@ -171,6 +181,7 @@ class _BlockingControl extends StatelessWidget {
   const _BlockingControl({
     required this.permissions,
     required this.hasEnabledRule,
+    required this.needsAccessibility,
     required this.running,
     required this.startError,
     required this.onStart,
@@ -179,6 +190,7 @@ class _BlockingControl extends StatelessWidget {
 
   final PermissionState permissions;
   final bool hasEnabledRule;
+  final bool needsAccessibility;
   final bool running;
   final String? startError;
   final VoidCallback onStart;
@@ -188,8 +200,10 @@ class _BlockingControl extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasEnforcementPermissions =
         permissions.usageAccess && permissions.overlay;
-    final canStart = permissions.allGranted && hasEnabledRule;
+    final canStart = permissions.requiredGranted && hasEnabledRule;
     final enforcing = running && hasEnforcementPermissions && hasEnabledRule;
+    final missingAccessibility =
+        needsAccessibility && !permissions.accessibility;
     final status = enforcing
         ? 'Blocking is on'
         : running
@@ -199,8 +213,10 @@ class _BlockingControl extends StatelessWidget {
         ? 'Grant ${_missingEnforcementPermissions()} before SerenSync can enforce.'
         : !hasEnabledRule
         ? 'Enable a blocking rule before SerenSync can enforce.'
-        : !permissions.allGranted
+        : !permissions.requiredGranted
         ? 'SerenSync is enforcing your enabled rules. Grant ${_missingPermissions()} to keep it running.'
+        : enforcing && missingAccessibility
+        ? 'SerenSync is enforcing your enabled rules. Allow accessibility to block websites and keywords too.'
         : enforcing
         ? 'SerenSync is enforcing your enabled rules.'
         : 'Turn on blocking to enforce your enabled rules.';

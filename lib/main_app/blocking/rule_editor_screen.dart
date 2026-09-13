@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
@@ -5,33 +7,41 @@ import '../../apps/app_service.dart';
 import '../../apps/installed_app.dart';
 import 'blocking_colors.dart';
 import 'blocking_engine.dart';
+import 'onboarding/permission_status.dart';
 import 'rule.dart';
 import 'rule_store.dart';
 import 'widgets/app_picker.dart';
 import 'widgets/trigger_editor.dart';
+import 'widgets/web_target_picker.dart';
 
 class RuleEditorScreen extends StatefulWidget {
   final RuleStore ruleStore;
   final AppService appService;
+  final PermissionStatus permissionStatus;
   final BlockRule? rule;
 
-  const RuleEditorScreen({
+  RuleEditorScreen({
     super.key,
     required this.ruleStore,
     required this.appService,
+    PermissionStatus? permissionStatus,
     this.rule,
-  });
+  }) : permissionStatus = permissionStatus ?? PermissionStatus();
 
   @override
   State<RuleEditorScreen> createState() => _RuleEditorScreenState();
 }
 
-class _RuleEditorScreenState extends State<RuleEditorScreen> {
+class _RuleEditorScreenState extends State<RuleEditorScreen>
+    with WidgetsBindingObserver {
   late final TextEditingController _nameController;
   late Set<String> _packages;
+  late Set<String> _websites;
+  late Set<String> _keywords;
   late Trigger _trigger;
   late Future<List<InstalledApp>> _appsLoad;
   List<InstalledApp> _installedApps = const [];
+  bool? _accessibilityEnabled;
   bool _saving = false;
   bool _saveError = false;
 
@@ -41,16 +51,41 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
     final rule = widget.rule;
     _nameController = TextEditingController(text: rule?.name ?? '');
     _packages = Set<String>.of(rule?.packages ?? const <String>{});
+    _websites = Set<String>.of(rule?.websites ?? const <String>{});
+    _keywords = Set<String>.of(rule?.keywords ?? const <String>{});
     _trigger = rule?.trigger ?? TriggerEditor.defaultSchedule;
     _appsLoad = widget.appService.getInstalledApps();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_refreshAccessibility());
   }
 
-  bool get _canSave => !_saving && _packages.isNotEmpty;
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_refreshAccessibility());
+  }
+
+  Future<void> _refreshAccessibility() async {
+    final permissions = await widget.permissionStatus.check();
+    if (mounted) {
+      setState(() => _accessibilityEnabled = permissions.accessibility);
+    }
+  }
+
+  Future<void> _requestAccessibility() async {
+    await widget.permissionStatus.request(RequiredPermission.accessibility);
+    await _refreshAccessibility();
+  }
+
+  bool get _blocksWeb => _websites.isNotEmpty || _keywords.isNotEmpty;
+
+  bool get _canSave => !_saving && (_packages.isNotEmpty || _blocksWeb);
 
   String get _derivedName {
     final names = [
       for (final app in _installedApps)
         if (_packages.contains(app.packageName)) app.displayName,
+      ..._websites,
+      ..._keywords,
     ];
     if (names.length <= 2) return names.join(', ');
     return '${names.take(2).join(', ')} + ${names.length - 2} more';
@@ -68,6 +103,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
       id: existingRule?.id ?? 0,
       name: name.isEmpty ? _derivedName : name,
       packages: _packages,
+      websites: _websites,
+      keywords: _keywords,
       trigger: _trigger,
       enabled: existingRule?.enabled ?? true,
     );
@@ -105,6 +142,39 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
       ),
     );
     if (packages != null && mounted) setState(() => _packages = packages);
+  }
+
+  Future<void> _editWebsites() async {
+    final websites = await Navigator.of(context).push<Set<String>>(
+      MaterialPageRoute(
+        builder: (_) => WebTargetPicker(
+          title: 'Websites',
+          hint: 'Add a website, like instagram.com',
+          invalidMessage: 'Enter a website such as instagram.com.',
+          values: _websites,
+          normalize: (input) => parseAddress(input)?.host,
+        ),
+      ),
+    );
+    if (websites != null && mounted) setState(() => _websites = websites);
+  }
+
+  Future<void> _editKeywords() async {
+    final keywords = await Navigator.of(context).push<Set<String>>(
+      MaterialPageRoute(
+        builder: (_) => WebTargetPicker(
+          title: 'Keywords',
+          hint: 'Add a keyword, like casino',
+          invalidMessage: 'Enter a keyword.',
+          values: _keywords,
+          normalize: (input) {
+            final keyword = input.trim().toLowerCase();
+            return keyword.isEmpty ? null : keyword;
+          },
+        ),
+      ),
+    );
+    if (keywords != null && mounted) setState(() => _keywords = keywords);
   }
 
   void _changeTriggerType(String? type) {
@@ -176,7 +246,10 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
           _blockingSection(),
           if (_saveError) ...[
             const SizedBox(height: 20),
-            const _ErrorMessage(),
+            const _Note(
+              icon: Icons.error_outline,
+              message: 'Could not save this schedule. Try again.',
+            ),
           ],
         ],
       ),
@@ -304,25 +377,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
         ),
         if (_conditionNote case final note?) ...[
           const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              border: Border.all(color: BlockingColors.outline),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.info_outline, color: BlockingColors.accent),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    note,
-                    style: const TextStyle(color: Colors.white70),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _Note(message: note),
         ],
       ],
     );
@@ -338,7 +393,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
         ),
         const SizedBox(height: 6),
         const Text(
-          'Select the apps you want this schedule to block.',
+          'Select the apps, websites, and keywords this schedule blocks.',
           style: TextStyle(color: Colors.white60, fontSize: 15),
         ),
         const SizedBox(height: 16),
@@ -347,34 +402,11 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
           builder: (context, snapshot) {
             if (snapshot.hasData) {
               _installedApps = snapshot.data!;
-              return Material(
-                color: BlockingColors.surface,
-                borderRadius: BorderRadius.circular(20),
-                clipBehavior: Clip.antiAlias,
-                child: ListTile(
-                  key: const ValueKey('apps-summary'),
-                  minTileHeight: 84,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                  title: const Text(
-                    'Apps',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '${_packages.length}',
-                        style: const TextStyle(
-                          color: Colors.white54,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Icon(Icons.chevron_right, color: Colors.white54),
-                    ],
-                  ),
-                  onTap: () => _selectApps(snapshot.data!),
-                ),
+              return _TargetTile(
+                key: const ValueKey('apps-summary'),
+                title: 'Apps',
+                count: _packages.length,
+                onTap: () => _selectApps(snapshot.data!),
               );
             }
             if (snapshot.hasError) {
@@ -387,6 +419,44 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
             return const _AppsLoading();
           },
         ),
+        const SizedBox(height: 12),
+        _TargetTile(
+          key: const ValueKey('websites-summary'),
+          title: 'Websites',
+          count: _websites.length,
+          onTap: _editWebsites,
+        ),
+        const SizedBox(height: 12),
+        _TargetTile(
+          key: const ValueKey('keywords-summary'),
+          title: 'Keywords',
+          count: _keywords.length,
+          onTap: _editKeywords,
+        ),
+        if (_blocksWeb && _accessibilityEnabled == false) ...[
+          const SizedBox(height: 14),
+          _Note(
+            message:
+                'Allow accessibility so SerenSync can read the address bar '
+                'and block websites and keywords.',
+            action: TextButton(
+              key: const ValueKey('allow-accessibility'),
+              style: TextButton.styleFrom(
+                foregroundColor: BlockingColors.accent,
+              ),
+              onPressed: _requestAccessibility,
+              child: const Text('Allow'),
+            ),
+          ),
+        ],
+        if (_blocksWeb && _trigger is! Schedule) ...[
+          const SizedBox(height: 14),
+          const _Note(
+            message:
+                'Websites and keywords are blocked all day, because '
+                'browsing time does not count towards the limit.',
+          ),
+        ],
       ],
     );
   }
@@ -429,8 +499,51 @@ class _RuleEditorScreenState extends State<RuleEditorScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _nameController.dispose();
     super.dispose();
+  }
+}
+
+class _TargetTile extends StatelessWidget {
+  final String title;
+  final int count;
+  final VoidCallback onTap;
+
+  const _TargetTile({
+    super.key,
+    required this.title,
+    required this.count,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: BlockingColors.surface,
+      borderRadius: BorderRadius.circular(20),
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        minTileHeight: 84,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+        title: Text(
+          title,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '$count',
+              style: const TextStyle(color: Colors.white54, fontSize: 16),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right, color: Colors.white54),
+          ],
+        ),
+        onTap: onTap,
+      ),
+    );
   }
 }
 
@@ -486,22 +599,33 @@ class _AppsLoadError extends StatelessWidget {
   }
 }
 
-class _ErrorMessage extends StatelessWidget {
-  const _ErrorMessage();
+class _Note extends StatelessWidget {
+  final IconData icon;
+  final String message;
+  final Widget? action;
+
+  const _Note({
+    this.icon = Icons.info_outline,
+    required this.message,
+    this.action,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
       decoration: BoxDecoration(
         border: Border.all(color: BlockingColors.outline),
         borderRadius: BorderRadius.circular(18),
       ),
-      child: const Row(
+      child: Row(
         children: [
-          Icon(Icons.error_outline, color: BlockingColors.accent),
-          SizedBox(width: 12),
-          Expanded(child: Text('Could not save this schedule. Try again.')),
+          Icon(icon, color: BlockingColors.accent),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(message, style: const TextStyle(color: Colors.white70)),
+          ),
+          if (action case final action?) ...[const SizedBox(width: 8), action],
         ],
       ),
     );

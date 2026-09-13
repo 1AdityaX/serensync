@@ -1,5 +1,7 @@
 import 'package:usage_stats/usage_stats.dart';
 
+import '../blocking/blocking_engine.dart';
+
 const _activityResumed = 1;
 const _activityPaused = 2;
 const _activityStopped = 23;
@@ -42,7 +44,8 @@ Future<List<UsageEvent>> readUsageEvents(DateTime start, DateTime end) async {
 /// Rebuilds foreground sessions from raw events and folds them into the
 /// buckets spanning `bucketStarts.first` to [end]. Bucket `i` covers
 /// `bucketStarts[i]` up to the next start, so callers can use calendar days
-/// without losing an hour to daylight saving.
+/// without losing an hour to daylight saving. SerenSync itself is the home
+/// screen and block screen, so it ends sessions but is never counted.
 UsageReport summarizeUsage({
   required List<UsageEvent> events,
   required List<DateTime> bucketStarts,
@@ -85,6 +88,7 @@ UsageReport summarizeUsage({
     if (event.type == _activityResumed) {
       if (event.packageName == foreground) continue;
       record(event.time);
+      if (event.packageName == applicationId) continue;
       foreground = event.packageName;
       openedAt = event.time;
       if (!event.time.isBefore(start) && !event.time.isAfter(end)) {
