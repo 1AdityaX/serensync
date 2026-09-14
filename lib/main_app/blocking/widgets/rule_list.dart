@@ -82,11 +82,37 @@ class _RuleListState extends State<RuleList> {
     });
   }
 
+  Future<void> _duplicate(BlockRule rule) async {
+    await widget.ruleStore.insert(
+      BlockRule(
+        id: 0,
+        name: '${rule.name} (copy)',
+        packages: rule.packages,
+        websites: rule.websites,
+        keywords: rule.keywords,
+        trigger: rule.trigger,
+        enabled: rule.enabled,
+      ),
+    );
+    FlutterForegroundTask.sendDataToTask(rulesChangedSignal);
+    await _loadRules();
+  }
+
   Future<void> _delete(BlockRule rule) async {
     await widget.ruleStore.delete(rule.id);
     FlutterForegroundTask.sendDataToTask(rulesChangedSignal);
     if (!mounted) return;
     setState(() => _rules?.removeWhere((candidate) => candidate.id == rule.id));
+  }
+
+  Future<void> _act(BlockRule rule, _BlockAction action) {
+    return switch (action) {
+      _BlockAction.edit => _openEditor(rule),
+      _BlockAction.pause => _toggle(rule, false),
+      _BlockAction.block => _toggle(rule, true),
+      _BlockAction.duplicate => _duplicate(rule),
+      _BlockAction.delete => _delete(rule),
+    };
   }
 
   @override
@@ -143,18 +169,16 @@ class _RuleListState extends State<RuleList> {
             _BlockCard(
               rule: rule,
               onOpen: () => _openEditor(rule),
-              onToggle: (enabled) => _toggle(rule, enabled),
-              onDelete: () => _delete(rule),
+              onAction: (action) => _act(rule, action),
             ),
         ],
         if (inactive.isNotEmpty) ...[
-          const _SectionHeader('Inactive blocks'),
+          const _SectionHeader('Paused blocks'),
           for (final rule in inactive)
             _BlockCard(
               rule: rule,
               onOpen: () => _openEditor(rule),
-              onToggle: (enabled) => _toggle(rule, enabled),
-              onDelete: () => _delete(rule),
+              onAction: (action) => _act(rule, action),
             ),
         ],
       ],
@@ -199,8 +223,9 @@ class _SectionHeader extends StatelessWidget {
       child: Text(
         title,
         style: const TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Colors.white70,
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: BlockingColors.textMuted,
         ),
       ),
     );
@@ -211,52 +236,136 @@ class _BlockCard extends StatelessWidget {
   const _BlockCard({
     required this.rule,
     required this.onOpen,
-    required this.onToggle,
-    required this.onDelete,
+    required this.onAction,
   });
 
   final BlockRule rule;
   final VoidCallback onOpen;
-  final ValueChanged<bool> onToggle;
-  final VoidCallback onDelete;
+  final ValueChanged<_BlockAction> onAction;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        onTap: onOpen,
-        title: Text(rule.name),
-        subtitle: Row(
-          children: [
-            Icon(_triggerIcon(rule.trigger), size: 16, color: Colors.white54),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                '${triggerSummary(rule.trigger)} · ${_targetSummary(rule)}',
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
+    final tint = rule.enabled
+        ? BlockingColors.accent
+        : BlockingColors.textMuted;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: BlockingColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: BlockingColors.outline),
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Switch(
-              key: ValueKey('rule-enabled-${rule.id}'),
-              value: rule.enabled,
-              activeTrackColor: BlockingColors.accent.withValues(alpha: 0.45),
-              activeThumbColor: BlockingColors.accent,
-              onChanged: onToggle,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onOpen,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 4, 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: tint.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _triggerIcon(rule.trigger),
+                    size: 20,
+                    color: tint,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        rule.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${triggerSummary(rule.trigger)}\n'
+                        '${_targetSummary(rule)}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          height: 1.35,
+                          color: BlockingColors.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _BlockMenu(rule: rule, onSelected: onAction),
+              ],
             ),
-            IconButton(
-              key: ValueKey('delete-rule-${rule.id}'),
-              tooltip: 'Delete ${rule.name}',
-              icon: const Icon(Icons.delete_outline, size: 20),
-              onPressed: onDelete,
-            ),
-          ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+enum _BlockAction { edit, pause, block, duplicate, delete }
+
+const _danger = Color(0xFFF28B82);
+
+class _BlockMenu extends StatelessWidget {
+  const _BlockMenu({required this.rule, required this.onSelected});
+
+  final BlockRule rule;
+  final ValueChanged<_BlockAction> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<_BlockAction>(
+      key: ValueKey('rule-menu-${rule.id}'),
+      tooltip: 'Options for ${rule.name}',
+      icon: const Icon(Icons.more_vert, color: BlockingColors.textMuted),
+      position: PopupMenuPosition.under,
+      color: BlockingColors.surfaceRaised,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: BlockingColors.outline),
+      ),
+      onSelected: onSelected,
+      itemBuilder: (_) => [
+        _item(_BlockAction.edit, Icons.edit_outlined, 'Edit'),
+        if (rule.enabled)
+          _item(_BlockAction.pause, Icons.pause_circle_outline, 'Pause')
+        else
+          _item(_BlockAction.block, Icons.block, 'Block'),
+        _item(_BlockAction.duplicate, Icons.content_copy_outlined, 'Duplicate'),
+        _item(_BlockAction.delete, Icons.delete_outline, 'Delete', _danger),
+      ],
+    );
+  }
+
+  PopupMenuItem<_BlockAction> _item(
+    _BlockAction action,
+    IconData icon,
+    String label, [
+    Color color = Colors.white,
+  ]) {
+    return PopupMenuItem(
+      key: ValueKey('rule-${action.name}'),
+      value: action,
+      height: 44,
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 12),
+          Text(label, style: TextStyle(fontSize: 14, color: color)),
+        ],
       ),
     );
   }

@@ -339,31 +339,72 @@ void main() {
     await _pumpRules(tester, ruleStore, appService);
     expect(find.textContaining('1 app · 1 site · 2 keywords'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('rule-enabled-15')));
-    await tester.pumpAndSettle();
+    await _chooseRuleAction(tester, 15, 'pause');
 
     expect(ruleStore.rules.single.enabled, isFalse);
     expect(ruleStore.rules.single.websites, {'instagram.com'});
     expect(ruleStore.rules.single.keywords, {'casino', 'bet'});
   });
 
-  testWidgets('rule toggle persists the enabled state', (tester) async {
+  testWidgets('pausing a rule persists and moves it to paused', (tester) async {
     ruleStore.rules.add(_rule(id: 12, name: 'Focus', enabled: true));
     await _pumpRules(tester, ruleStore, appService);
 
-    await tester.tap(find.byKey(const ValueKey('rule-enabled-12')));
-    await tester.pumpAndSettle();
+    await _chooseRuleAction(tester, 12, 'pause');
 
     expect(ruleStore.rules.single.enabled, isFalse);
+    expect(find.text('Paused blocks'), findsOneWidget);
     expect(rulesChangedSignals, 1);
+  });
+
+  testWidgets('a paused rule offers block instead of pause', (tester) async {
+    ruleStore.rules.add(_rule(id: 16, name: 'Evening', enabled: false));
+    await _pumpRules(tester, ruleStore, appService);
+
+    await tester.tap(find.byKey(const ValueKey('rule-menu-16')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('rule-pause')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('rule-block')));
+    await tester.pumpAndSettle();
+
+    expect(ruleStore.rules.single.enabled, isTrue);
+    expect(find.text('Active blocks'), findsOneWidget);
+    expect(rulesChangedSignals, 1);
+  });
+
+  testWidgets('duplicating a rule saves a copy', (tester) async {
+    ruleStore.rules.add(
+      _rule(id: 17, name: 'Web', enabled: true, websites: {'reddit.com'}),
+    );
+    await _pumpRules(tester, ruleStore, appService);
+
+    await _chooseRuleAction(tester, 17, 'duplicate');
+
+    expect(ruleStore.rules, hasLength(2));
+    final copy = ruleStore.rules.last;
+    expect(copy.name, 'Web (copy)');
+    expect(copy.packages, {'com.example.alpha'});
+    expect(copy.websites, {'reddit.com'});
+    expect(copy.enabled, isTrue);
+    expect(find.text('Web (copy)'), findsOneWidget);
+    expect(rulesChangedSignals, 1);
+  });
+
+  testWidgets('edit opens the rule editor', (tester) async {
+    ruleStore.rules.add(_rule(id: 18, name: 'Focus', enabled: true));
+    await _pumpRules(tester, ruleStore, appService);
+
+    await _chooseRuleAction(tester, 18, 'edit');
+
+    expect(find.byKey(const ValueKey('rule-save')), findsOneWidget);
   });
 
   testWidgets('deleting a rule removes it', (tester) async {
     ruleStore.rules.add(_rule(id: 13, name: 'Temporary', enabled: true));
     await _pumpRules(tester, ruleStore, appService);
 
-    await tester.tap(find.byKey(const ValueKey('delete-rule-13')));
-    await tester.pumpAndSettle();
+    await _chooseRuleAction(tester, 13, 'delete');
 
     expect(ruleStore.rules, isEmpty);
     expect(find.text('Temporary'), findsNothing);
@@ -493,6 +534,17 @@ Future<void> _pumpRules(
       child: RulesScreen(ruleStore: ruleStore, appService: appService),
     ),
   );
+  await tester.pumpAndSettle();
+}
+
+Future<void> _chooseRuleAction(
+  WidgetTester tester,
+  int ruleId,
+  String action,
+) async {
+  await tester.tap(find.byKey(ValueKey('rule-menu-$ruleId')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(ValueKey('rule-$action')));
   await tester.pumpAndSettle();
 }
 
