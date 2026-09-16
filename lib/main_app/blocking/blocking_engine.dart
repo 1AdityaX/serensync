@@ -285,7 +285,6 @@ class BlockingTask extends TaskHandler {
     _phaseClock?.cancel();
     await _addresses?.cancel();
     await _engine.overlay.hide();
-    await _ruleStore.close();
   }
 
   Future<bool> _checkEnforcementPermissions() async {
