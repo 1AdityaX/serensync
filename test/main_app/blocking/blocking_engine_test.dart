@@ -327,6 +327,41 @@ void main() {
     expect(overlay.visible, isTrue);
   });
 
+  test(
+    'a forced rule blocks even while paused, until it is released',
+    () async {
+      const paused = BlockRule(
+        id: 7,
+        name: 'Focus',
+        packages: <String>{blockedPackage},
+        trigger: LaunchQuota(99),
+        enabled: false,
+      );
+      final foreground = FakeForegroundApp(
+        packageName: blockedPackage,
+        usage: const AppUsage(foregroundTime: Duration.zero, launches: 0),
+      );
+      final overlay = FakeBlockOverlay();
+      final engine = BlockingEngine(
+        foregroundApp: foreground,
+        overlay: overlay,
+        rules: const <BlockRule>[paused],
+      );
+
+      await engine.tick(now);
+      expect(overlay.visible, isFalse);
+
+      engine.forceRules(const <int>{7});
+      await engine.tick(now);
+      expect(overlay.visible, isTrue);
+      expect(overlay.ruleName, 'Focus');
+
+      engine.forceRules(const <int>{});
+      await engine.tick(now);
+      expect(overlay.visible, isFalse);
+    },
+  );
+
   group('web pages', () {
     test('a blocked page in the foreground browser shows its host', () async {
       final foreground = FakeForegroundApp(packageName: browser);

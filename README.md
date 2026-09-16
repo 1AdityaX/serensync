@@ -16,9 +16,14 @@ combines a quiet home screen with rules that interrupt distracting app use.
 - Enable, edit, and delete limits
 - Full-screen blocking overlay with a return-home action for apps and a
   go-back action for pages
-- Guided setup for usage access, overlays, notifications, battery
-  optimisation, and accessibility
-- Foreground blocking service that restarts after boot and app updates
+- First-open intro that explains the problem, then walks through usage
+  access, overlays, notifications, battery optimisation, and accessibility
+  one permission at a time
+- Pomodoro focus sessions that lock chosen blocks for each focus round, with
+  adjustable focus, break and long-break lengths, a countdown in the
+  notification shade and an alert when a phase ends
+- Foreground blocking service that starts by itself while a block is enabled
+  or a focus session runs, and restarts after boot and app updates
 
 SerenSync deliberately has no accounts, analytics, backend, uninstall
 protection, or non-Android platform support. Browsing time is not measured,
@@ -31,8 +36,8 @@ lib/
   apps/        app discovery, persistence, search, and launch actions
   blocking/    pure rule evaluation, persistence, engine, overlay, and UI
   home/        launcher home screen and shortcuts
-  onboarding/  permission setup and blocking-service controls
-  settings/    settings navigation
+  onboarding/  first-open intro and permission walkthrough
+  pomodoro/    focus sessions, their persistence and the phase alert
 ```
 
 The main product logic lives in `lib/main_app/blocking/rule.dart`. It is pure
@@ -77,5 +82,6 @@ recovery, and battery behavior still require a physical Android device.
 | `RECEIVE_BOOT_COMPLETED` | Restart blocking after reboot |
 | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Reduce background process killing |
 | `BIND_ACCESSIBILITY_SERVICE` | Read the address bar of supported browsers for website and keyword blocks |
+| `VIBRATE` | Buzz when a focus round or break ends |
 
 Usage data stays on the device.

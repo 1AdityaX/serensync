@@ -1,15 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../apps/app_service.dart';
-import '../launcher/launcher_controller.dart';
+import 'blocking/blocking_colors.dart';
 import 'blocking/blocking_engine.dart';
-import 'blocking/onboarding/permission_flow.dart';
 import 'blocking/onboarding/permission_status.dart';
 import 'blocking/rule_store.dart';
 import 'blocking/widgets/rule_list.dart';
+import 'pomodoro/pomodoro_store.dart';
+import 'pomodoro/pomodoro_tab.dart';
 import 'stats/stats_tab.dart';
 
 enum _DashboardTab { pomodoro, blocks, strictMode, stats, settings }
@@ -18,13 +18,17 @@ class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
     super.key,
     required this.appService,
-    required this.launcherController,
     required this.ruleStore,
+    required this.blockingService,
+    required this.permissionStatus,
+    required this.pomodoroStore,
   });
 
   final AppService appService;
-  final LauncherController launcherController;
   final RuleStore ruleStore;
+  final BlockingService blockingService;
+  final PermissionStatus permissionStatus;
+  final PomodoroStore pomodoroStore;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -33,43 +37,26 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen>
     with WidgetsBindingObserver {
   _DashboardTab _tab = _DashboardTab.blocks;
-  bool _launcherEnabled = false;
-  bool _launcherChanging = false;
+  PermissionState? _permissions;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    unawaited(_refreshLauncher());
+    unawaited(_refresh());
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      unawaited(_refreshLauncher());
-    }
+    if (state == AppLifecycleState.resumed) unawaited(_refresh());
   }
 
-  Future<void> _refreshLauncher() async {
-    final enabled = await widget.launcherController.isEnabled;
-    if (mounted) setState(() => _launcherEnabled = enabled);
-  }
-
-  Future<void> _setLauncherEnabled(bool enabled) async {
-    setState(() => _launcherChanging = true);
-    try {
-      await widget.launcherController.setEnabled(enabled);
-      if (mounted) setState(() => _launcherEnabled = enabled);
-    } on PlatformException catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.message ?? 'Could not update the launcher.'),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _launcherChanging = false);
-    }
+  // Permissions change outside the app, so every return re-checks them and
+  // lets the blocking service follow.
+  Future<void> _refresh() async {
+    final permissions = await widget.permissionStatus.check();
+    if (mounted) setState(() => _permissions = permissions);
+    await widget.blockingService.sync(widget.ruleStore);
   }
 
   @override
@@ -108,26 +95,48 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Widget _buildBody() {
-    switch (_tab) {
-      case _DashboardTab.pomodoro:
-        return const _ComingSoonTab(title: 'Pomodoro');
-      case _DashboardTab.blocks:
-        return RuleList(
-          ruleStore: widget.ruleStore,
-          appService: widget.appService,
-        );
-      case _DashboardTab.strictMode:
-        return const _ComingSoonTab(title: 'Strict mode');
-      case _DashboardTab.stats:
-        return StatsTab(appService: widget.appService);
-      case _DashboardTab.settings:
-        return _SettingsTab(
-          ruleStore: widget.ruleStore,
-          launcherEnabled: _launcherEnabled,
-          launcherChanging: _launcherChanging,
-          onLauncherChanged: _setLauncherEnabled,
-        );
-    }
+    final body = switch (_tab) {
+      _DashboardTab.pomodoro => PomodoroTab(
+        ruleStore: widget.ruleStore,
+        blockingService: widget.blockingService,
+        pomodoroStore: widget.pomodoroStore,
+      ),
+      _DashboardTab.blocks => RuleList(
+        ruleStore: widget.ruleStore,
+        appService: widget.appService,
+        blockingService: widget.blockingService,
+      ),
+      _DashboardTab.strictMode => const _ComingSoonTab(title: 'Strict mode'),
+      _DashboardTab.stats => StatsTab(appService: widget.appService),
+      _DashboardTab.settings => ListView(
+        children: const [
+          ListTile(
+            title: Text('Minimal launcher'),
+            subtitle: Text('Coming soon'),
+          ),
+        ],
+      ),
+    };
+    final permissions = _permissions;
+    final missing = permissions == null
+        ? null
+        : !permissions.usageAccess
+        ? RequiredPermission.usageAccess
+        : !permissions.overlay
+        ? RequiredPermission.overlay
+        : null;
+    final enforces =
+        _tab == _DashboardTab.pomodoro || _tab == _DashboardTab.blocks;
+    if (missing == null || !enforces) return body;
+    return Column(
+      children: [
+        _PermissionBanner(
+          permission: missing,
+          onAllow: () => unawaited(widget.permissionStatus.request(missing)),
+        ),
+        Expanded(child: body),
+      ],
+    );
   }
 
   @override
@@ -137,45 +146,37 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 }
 
-class _SettingsTab extends StatelessWidget {
-  const _SettingsTab({
-    required this.ruleStore,
-    required this.launcherEnabled,
-    required this.launcherChanging,
-    required this.onLauncherChanged,
-  });
+class _PermissionBanner extends StatelessWidget {
+  const _PermissionBanner({required this.permission, required this.onAllow});
 
-  final RuleStore ruleStore;
-  final bool launcherEnabled;
-  final bool launcherChanging;
-  final ValueChanged<bool> onLauncherChanged;
+  final RequiredPermission permission;
+  final VoidCallback onAllow;
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      children: [
-        ListTile(
-          key: const ValueKey('app-blocking'),
-          title: const Text('App blocking'),
-          subtitle: const Text('Permissions and enforcement'),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => PermissionFlow(
-                permissionStatus: PermissionStatus(),
-                ruleStore: ruleStore,
-                blockingService: BlockingService(),
+    return Material(
+      color: BlockingColors.surface,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Blocking needs ${permissionTitle(permission).toLowerCase()}.',
+                style: const TextStyle(fontSize: 14),
               ),
             ),
-          ),
+            TextButton(
+              key: const ValueKey('permission-banner-allow'),
+              onPressed: onAllow,
+              style: TextButton.styleFrom(
+                foregroundColor: BlockingColors.accent,
+              ),
+              child: const Text('Allow'),
+            ),
+          ],
         ),
-        SwitchListTile(
-          key: const ValueKey('launcher-toggle'),
-          title: const Text('Minimal launcher'),
-          subtitle: const Text('Use SerenSync as your Home app'),
-          value: launcherEnabled,
-          onChanged: launcherChanging ? null : onLauncherChanged,
-        ),
-      ],
+      ),
     );
   }
 }

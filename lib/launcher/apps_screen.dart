@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 
 import '../apps/app_service.dart';
 import '../apps/installed_app.dart';
-import '../main_app/settings_screen.dart';
 import 'widgets/app_options_dialog.dart';
 import 'widgets/app_search_bar.dart';
 
@@ -83,14 +82,6 @@ class _AppsScreenState extends State<AppsScreen>
         .toList();
   }
 
-  void _openSettings() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => SettingsScreen(appService: widget.appService),
-      ),
-    );
-  }
-
   Future<void> _openApp(InstalledApp app) async {
     setState(() => _searchQuery = '');
     if (app.packageName == 'com.example.serensync' &&
@@ -109,7 +100,7 @@ class _AppsScreenState extends State<AppsScreen>
         title: AppSearchBar(
           query: _searchQuery,
           onChanged: (query) => setState(() => _searchQuery = query),
-          onOpenSettings: _openSettings,
+          onOpenSettings: () => widget.onOpenSerenSync?.call(),
         ),
       ),
       body: _buildBody(),

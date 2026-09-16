@@ -29,7 +29,6 @@ const _months = [
   'Nov',
   'Dec',
 ];
-const _rising = Color(0xFFF0A868);
 const _falling = Color(0xFF6FD08C);
 
 typedef _Window = ({
@@ -319,7 +318,7 @@ class _StatsTabState extends State<StatsTab> with WidgetsBindingObserver {
                 view.previousTotal.inSeconds *
                 100)
             .round();
-    final color = change > 0 ? _rising : _falling;
+    final color = change > 0 ? BlockingColors.rising : _falling;
     final period = view.range == _Range.day ? 'yesterday' : 'last week';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),

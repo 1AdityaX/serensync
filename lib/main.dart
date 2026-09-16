@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'apps/app_service.dart';
@@ -6,8 +8,12 @@ import 'launcher/home/home_screen.dart';
 import 'launcher/launcher_controller.dart';
 import 'main_app/blocking/block_overlay.dart';
 import 'main_app/blocking/blocking_engine.dart';
+import 'main_app/blocking/onboarding/permission_status.dart';
 import 'main_app/blocking/rule_store.dart';
 import 'main_app/dashboard_screen.dart';
+import 'main_app/onboarding/onboarding_screen.dart';
+import 'main_app/onboarding/onboarding_store.dart';
+import 'main_app/pomodoro/pomodoro_store.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,15 +31,27 @@ class MyApp extends StatelessWidget {
   final AppService appService;
   final LauncherController launcherController;
   final RuleStore ruleStore;
+  final OnboardingStore onboardingStore;
+  final PermissionStatus permissionStatus;
+  final BlockingService blockingService;
+  final PomodoroStore pomodoroStore;
 
   MyApp({
     super.key,
     AppService? appService,
     LauncherController? launcherController,
     RuleStore? ruleStore,
+    OnboardingStore? onboardingStore,
+    PermissionStatus? permissionStatus,
+    BlockingService? blockingService,
+    PomodoroStore? pomodoroStore,
   }) : appService = appService ?? AppService(),
        launcherController = launcherController ?? LauncherController(),
-       ruleStore = ruleStore ?? RuleStore();
+       ruleStore = ruleStore ?? RuleStore(),
+       onboardingStore = onboardingStore ?? OnboardingStore(),
+       permissionStatus = permissionStatus ?? PermissionStatus(),
+       blockingService = blockingService ?? BlockingService(),
+       pomodoroStore = pomodoroStore ?? PomodoroStore();
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +61,9 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.black,
         appBarTheme: const AppBarTheme(
           surfaceTintColor: Colors.black,
+          backgroundColor: Colors.black,
+        ),
+        navigationBarTheme: const NavigationBarThemeData(
           backgroundColor: Colors.black,
         ),
         listTileTheme: const ListTileThemeData(
@@ -56,6 +77,10 @@ class MyApp extends StatelessWidget {
         appService: appService,
         launcherController: launcherController,
         ruleStore: ruleStore,
+        onboardingStore: onboardingStore,
+        permissionStatus: permissionStatus,
+        blockingService: blockingService,
+        pomodoroStore: pomodoroStore,
       ),
     );
   }
@@ -65,12 +90,20 @@ class MainScreen extends StatefulWidget {
   final AppService appService;
   final LauncherController launcherController;
   final RuleStore ruleStore;
+  final OnboardingStore onboardingStore;
+  final PermissionStatus permissionStatus;
+  final BlockingService blockingService;
+  final PomodoroStore pomodoroStore;
 
   const MainScreen({
     super.key,
     required this.appService,
     required this.launcherController,
     required this.ruleStore,
+    required this.onboardingStore,
+    required this.permissionStatus,
+    required this.blockingService,
+    required this.pomodoroStore,
   });
 
   @override
@@ -79,6 +112,7 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   bool? _showLauncher;
+  bool? _onboarded;
 
   @override
   void initState() {
@@ -89,7 +123,17 @@ class _MainScreenState extends State<MainScreen> {
 
   Future<void> _readInitialPresentation() async {
     final showLauncher = await widget.launcherController.openedAsLauncher;
-    if (mounted) setState(() => _showLauncher = showLauncher);
+    final onboarded = await widget.onboardingStore.isComplete;
+    if (!mounted) return;
+    setState(() {
+      _showLauncher = showLauncher;
+      _onboarded = onboarded;
+    });
+  }
+
+  Future<void> _completeOnboarding() async {
+    await widget.onboardingStore.markComplete();
+    if (mounted) setState(() => _onboarded = true);
   }
 
   void _setPresentation(bool showLauncher) {
@@ -101,14 +145,23 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final showLauncher = _showLauncher;
-    if (showLauncher == null) {
+    final onboarded = _onboarded;
+    if (showLauncher == null || onboarded == null) {
       return const Scaffold(body: SizedBox.expand());
+    }
+    if (!showLauncher && !onboarded) {
+      return OnboardingScreen(
+        permissionStatus: widget.permissionStatus,
+        onFinished: () => unawaited(_completeOnboarding()),
+      );
     }
     if (!showLauncher) {
       return DashboardScreen(
         appService: widget.appService,
-        launcherController: widget.launcherController,
         ruleStore: widget.ruleStore,
+        blockingService: widget.blockingService,
+        permissionStatus: widget.permissionStatus,
+        pomodoroStore: widget.pomodoroStore,
       );
     }
     return LauncherScreen(

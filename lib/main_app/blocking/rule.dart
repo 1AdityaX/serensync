@@ -88,16 +88,19 @@ class Block extends Decision {
   const Block(this.rule);
 }
 
+/// Rules in [always] block whenever they match, whatever their trigger or
+/// enabled state; a focus session uses this.
 Decision decide({
   required List<BlockRule> rules,
   required String package,
   required DateTime now,
   required AppUsage usage,
+  Set<int> always = const <int>{},
 }) {
   for (final rule in rules) {
-    if (!rule.enabled || !rule.packages.contains(package)) {
-      continue;
-    }
+    if (!rule.packages.contains(package)) continue;
+    if (always.contains(rule.id)) return Block(rule);
+    if (!rule.enabled) continue;
 
     final blocks = switch (rule.trigger) {
       final Schedule schedule => _scheduleBlocks(schedule, now),
@@ -117,11 +120,12 @@ Decision decideWeb({
   required List<BlockRule> rules,
   required WebAddress address,
   required DateTime now,
+  Set<int> always = const <int>{},
 }) {
   for (final rule in rules) {
-    if (!rule.enabled || !_matchesAddress(rule, address)) {
-      continue;
-    }
+    if (!_matchesAddress(rule, address)) continue;
+    if (always.contains(rule.id)) return Block(rule);
+    if (!rule.enabled) continue;
 
     // Browsing time is not measured, so usage and launch limits block their
     // websites and keywords outright.

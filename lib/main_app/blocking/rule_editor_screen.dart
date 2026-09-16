@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../apps/app_service.dart';
 import '../../apps/installed_app.dart';
@@ -17,6 +16,7 @@ import 'widgets/web_target_picker.dart';
 class RuleEditorScreen extends StatefulWidget {
   final RuleStore ruleStore;
   final AppService appService;
+  final BlockingService blockingService;
   final PermissionStatus permissionStatus;
   final BlockRule? rule;
 
@@ -24,6 +24,7 @@ class RuleEditorScreen extends StatefulWidget {
     super.key,
     required this.ruleStore,
     required this.appService,
+    required this.blockingService,
     PermissionStatus? permissionStatus,
     this.rule,
   }) : permissionStatus = permissionStatus ?? PermissionStatus();
@@ -114,7 +115,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
       } else {
         await widget.ruleStore.update(rule);
       }
-      FlutterForegroundTask.sendDataToTask(rulesChangedSignal);
+      await widget.blockingService.sync(widget.ruleStore);
       if (mounted) Navigator.of(context).pop(true);
     } catch (_) {
       if (!mounted) return;

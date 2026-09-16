@@ -11,8 +11,11 @@ import 'package:serensync/launcher/apps_screen.dart';
 import 'package:serensync/launcher/home/home_screen.dart';
 import 'package:serensync/launcher/launcher_controller.dart';
 import 'package:serensync/main.dart';
+import 'package:serensync/main_app/blocking/blocking_engine.dart';
+import 'package:serensync/main_app/blocking/onboarding/permission_status.dart';
 import 'package:serensync/main_app/blocking/rule.dart';
 import 'package:serensync/main_app/blocking/rule_store.dart';
+import 'package:serensync/main_app/onboarding/onboarding_store.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -72,6 +75,9 @@ void main() {
         appService: appService,
         launcherController: FakeLauncherController(openedFromHome: true),
         ruleStore: FakeRuleStore(),
+        onboardingStore: FakeOnboardingStore(complete: true),
+        permissionStatus: FakePermissionStatus(),
+        blockingService: FakeBlockingService(),
       ),
     );
     await tester.pumpAndSettle();
@@ -180,6 +186,9 @@ void main() {
         appService: appService,
         launcherController: FakeLauncherController(openedFromHome: true),
         ruleStore: FakeRuleStore(),
+        onboardingStore: FakeOnboardingStore(complete: true),
+        permissionStatus: FakePermissionStatus(),
+        blockingService: FakeBlockingService(),
       ),
     );
     await tester.pump();
@@ -206,6 +215,9 @@ void main() {
         appService: appService,
         launcherController: FakeLauncherController(openedFromHome: true),
         ruleStore: FakeRuleStore(),
+        onboardingStore: FakeOnboardingStore(complete: true),
+        permissionStatus: FakePermissionStatus(),
+        blockingService: FakeBlockingService(),
       ),
     );
     await tester.pump();
@@ -229,6 +241,9 @@ void main() {
         appService: appService,
         launcherController: FakeLauncherController(openedFromHome: true),
         ruleStore: FakeRuleStore(),
+        onboardingStore: FakeOnboardingStore(complete: true),
+        permissionStatus: FakePermissionStatus(),
+        blockingService: FakeBlockingService(),
       ),
     );
     await tester.pumpAndSettle();
@@ -241,29 +256,81 @@ void main() {
     expect(appService.appListLoads, 0);
   });
 
-  testWidgets('app icon opens the dashboard and can enable the launcher', (
+  testWidgets('app icon opens the dashboard with a launcher placeholder', (
     WidgetTester tester,
   ) async {
-    final launcherController = FakeLauncherController();
+    final blockingService = FakeBlockingService();
     await tester.pumpWidget(
       MyApp(
         appService: appService,
-        launcherController: launcherController,
+        launcherController: FakeLauncherController(),
         ruleStore: FakeRuleStore(),
+        onboardingStore: FakeOnboardingStore(complete: true),
+        permissionStatus: FakePermissionStatus(),
+        blockingService: blockingService,
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Create a block'), findsOneWidget);
     expect(find.byType(PageView), findsNothing);
+    expect(blockingService.syncs, 1);
 
     await tester.tap(find.text('Settings'));
     await tester.pump();
 
-    await tester.tap(find.byKey(const ValueKey('launcher-toggle')));
-    await tester.pump();
+    expect(find.text('Minimal launcher'), findsOneWidget);
+    expect(find.text('App blocking'), findsNothing);
+  });
 
-    expect(launcherController.enabled, isTrue);
+  testWidgets(
+    'first open shows the intro and finishing it opens the dashboard',
+    (WidgetTester tester) async {
+      final onboardingStore = FakeOnboardingStore(complete: false);
+      await tester.pumpWidget(
+        MyApp(
+          appService: appService,
+          launcherController: FakeLauncherController(),
+          ruleStore: FakeRuleStore(),
+          onboardingStore: onboardingStore,
+          permissionStatus: FakePermissionStatus(),
+          blockingService: FakeBlockingService(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('4 hours 37 minutes a day.'), findsOneWidget);
+      expect(find.text('Create a block'), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('onboarding-skip')));
+      await tester.pumpAndSettle();
+      for (var page = 0; page <= RequiredPermission.values.length; page++) {
+        await tester.tap(find.byKey(const ValueKey('onboarding-primary')));
+        await tester.pumpAndSettle();
+      }
+
+      expect(onboardingStore.complete, isTrue);
+      expect(find.text('Create a block'), findsOneWidget);
+    },
+  );
+
+  testWidgets('the launcher never shows the intro', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MyApp(
+        appService: appService,
+        launcherController: FakeLauncherController(openedFromHome: true),
+        ruleStore: FakeRuleStore(),
+        onboardingStore: FakeOnboardingStore(complete: false),
+        permissionStatus: FakePermissionStatus(),
+        blockingService: FakeBlockingService(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(find.text('4 hours 37 minutes a day.'), findsNothing);
   });
 
   test('queues a refresh while an app scan is running', () async {
@@ -374,6 +441,41 @@ class FakeRuleStore extends RuleStore {
 
   @override
   Future<void> close() async {}
+}
+
+class FakeBlockingService extends BlockingService {
+  int syncs = 0;
+
+  @override
+  Future<void> sync(RuleStore ruleStore) async {
+    syncs++;
+  }
+}
+
+class FakeOnboardingStore extends OnboardingStore {
+  FakeOnboardingStore({required this.complete});
+
+  bool complete;
+
+  @override
+  Future<bool> get isComplete async => complete;
+
+  @override
+  Future<void> markComplete() async => complete = true;
+}
+
+class FakePermissionStatus extends PermissionStatus {
+  @override
+  Future<PermissionState> check() async => const PermissionState(
+    usageAccess: true,
+    overlay: true,
+    notifications: true,
+    batteryOptimisation: true,
+    accessibility: true,
+  );
+
+  @override
+  Future<void> request(RequiredPermission permission) async {}
 }
 
 class FakeLauncherController extends LauncherController {

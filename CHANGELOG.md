@@ -9,6 +9,10 @@ and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Pomodoro focus sessions that lock chosen blocks during focus, with a
+  notification countdown and an alert when a phase ends.
+- First-open intro with a short story and one screen per permission, shown
+  once before the dashboard.
 - Manual release workflow that builds a release APK and publishes a GitHub release.
 - Schedule, foreground-time, and launch-count app limits.
 - Website and keyword blocking in supported browsers, read from the address
@@ -20,6 +24,9 @@ and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The blocking service now starts and stops by itself; the manual switch and
+  the App blocking settings screen are gone.
+- The launcher's settings entry opens the main app.
 - Removed generated non-Android platform projects.
 - Removed settings and app actions that only opened placeholders.
 

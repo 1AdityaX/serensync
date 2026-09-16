@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../../apps/app_service.dart';
 import '../blocking_colors.dart';
@@ -13,10 +12,12 @@ class RuleList extends StatefulWidget {
     super.key,
     required this.ruleStore,
     required this.appService,
+    required this.blockingService,
   });
 
   final RuleStore ruleStore;
   final AppService appService;
+  final BlockingService blockingService;
 
   @override
   State<RuleList> createState() => _RuleListState();
@@ -52,6 +53,7 @@ class _RuleListState extends State<RuleList> {
         builder: (_) => RuleEditorScreen(
           ruleStore: widget.ruleStore,
           appService: widget.appService,
+          blockingService: widget.blockingService,
           rule: rule,
         ),
       ),
@@ -70,7 +72,7 @@ class _RuleListState extends State<RuleList> {
       enabled: enabled,
     );
     await widget.ruleStore.update(replacement);
-    FlutterForegroundTask.sendDataToTask(rulesChangedSignal);
+    await widget.blockingService.sync(widget.ruleStore);
     if (!mounted) return;
     setState(() {
       final rules = _rules;
@@ -94,13 +96,13 @@ class _RuleListState extends State<RuleList> {
         enabled: rule.enabled,
       ),
     );
-    FlutterForegroundTask.sendDataToTask(rulesChangedSignal);
+    await widget.blockingService.sync(widget.ruleStore);
     await _loadRules();
   }
 
   Future<void> _delete(BlockRule rule) async {
     await widget.ruleStore.delete(rule.id);
-    FlutterForegroundTask.sendDataToTask(rulesChangedSignal);
+    await widget.blockingService.sync(widget.ruleStore);
     if (!mounted) return;
     setState(() => _rules?.removeWhere((candidate) => candidate.id == rule.id));
   }

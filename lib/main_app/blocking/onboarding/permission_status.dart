@@ -13,6 +13,16 @@ enum RequiredPermission {
   accessibility,
 }
 
+String permissionTitle(RequiredPermission permission) {
+  return switch (permission) {
+    RequiredPermission.usageAccess => 'Usage access',
+    RequiredPermission.overlay => 'Display over other apps',
+    RequiredPermission.notifications => 'Notifications',
+    RequiredPermission.batteryOptimisation => 'Battery optimisation',
+    RequiredPermission.accessibility => 'Accessibility',
+  };
+}
+
 class PermissionState {
   const PermissionState({
     required this.usageAccess,
