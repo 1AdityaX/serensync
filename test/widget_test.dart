@@ -15,6 +15,8 @@ import 'package:serensync/main_app/blocking/blocking_engine.dart';
 import 'package:serensync/main_app/blocking/onboarding/permission_status.dart';
 import 'package:serensync/main_app/blocking/rule.dart';
 import 'package:serensync/main_app/blocking/rule_store.dart';
+import 'package:serensync/main_app/strict/strict_mode.dart';
+import 'package:serensync/main_app/strict/strict_mode_store.dart';
 import 'package:serensync/main_app/onboarding/onboarding_store.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -78,6 +80,7 @@ void main() {
         onboardingStore: FakeOnboardingStore(complete: true),
         permissionStatus: FakePermissionStatus(),
         blockingService: FakeBlockingService(),
+        strictModeStore: FakeStrictModeStore(),
       ),
     );
     await tester.pumpAndSettle();
@@ -189,6 +192,7 @@ void main() {
         onboardingStore: FakeOnboardingStore(complete: true),
         permissionStatus: FakePermissionStatus(),
         blockingService: FakeBlockingService(),
+        strictModeStore: FakeStrictModeStore(),
       ),
     );
     await tester.pump();
@@ -218,6 +222,7 @@ void main() {
         onboardingStore: FakeOnboardingStore(complete: true),
         permissionStatus: FakePermissionStatus(),
         blockingService: FakeBlockingService(),
+        strictModeStore: FakeStrictModeStore(),
       ),
     );
     await tester.pump();
@@ -244,6 +249,7 @@ void main() {
         onboardingStore: FakeOnboardingStore(complete: true),
         permissionStatus: FakePermissionStatus(),
         blockingService: FakeBlockingService(),
+        strictModeStore: FakeStrictModeStore(),
       ),
     );
     await tester.pumpAndSettle();
@@ -268,6 +274,7 @@ void main() {
         onboardingStore: FakeOnboardingStore(complete: true),
         permissionStatus: FakePermissionStatus(),
         blockingService: blockingService,
+        strictModeStore: FakeStrictModeStore(),
       ),
     );
     await tester.pumpAndSettle();
@@ -295,6 +302,7 @@ void main() {
           onboardingStore: onboardingStore,
           permissionStatus: FakePermissionStatus(),
           blockingService: FakeBlockingService(),
+          strictModeStore: FakeStrictModeStore(),
         ),
       );
       await tester.pumpAndSettle();
@@ -325,6 +333,7 @@ void main() {
         onboardingStore: FakeOnboardingStore(complete: false),
         permissionStatus: FakePermissionStatus(),
         blockingService: FakeBlockingService(),
+        strictModeStore: FakeStrictModeStore(),
       ),
     );
     await tester.pumpAndSettle();
@@ -450,6 +459,20 @@ class FakeBlockingService extends BlockingService {
   Future<void> sync(RuleStore ruleStore) async {
     syncs++;
   }
+}
+
+class FakeStrictModeStore extends StrictModeStore {
+  @override
+  Future<StrictMode?> read() async => null;
+
+  @override
+  Future<void> write(StrictMode? strict) async {}
+
+  @override
+  Future<bool> get emergencyUsed async => false;
+
+  @override
+  Future<void> markEmergencyUsed() async {}
 }
 
 class FakeOnboardingStore extends OnboardingStore {

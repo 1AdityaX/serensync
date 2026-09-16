@@ -64,7 +64,7 @@ void main() {
       },
     );
 
-    await overlay.show(packageName: blockedPackage, rule: blockingRule);
+    await overlay.show(packageName: blockedPackage, ruleName: 'One launch');
 
     expect(launches, 0);
   });
@@ -84,8 +84,8 @@ void main() {
       },
     );
 
-    await overlay.show(packageName: blockedPackage, rule: blockingRule);
-    await overlay.show(packageName: blockedPackage, rule: blockingRule);
+    await overlay.show(packageName: blockedPackage, ruleName: 'One launch');
+    await overlay.show(packageName: blockedPackage, ruleName: 'One launch');
 
     expect(shows, 1);
     expect(shares, 1);
@@ -96,13 +96,6 @@ void main() {
     () async {
       var active = false;
       final data = <Map<String, String>>[];
-      const otherRule = BlockRule(
-        id: 2,
-        name: 'Different rule',
-        packages: <String>{otherPackage},
-        trigger: LaunchQuota(1),
-        enabled: true,
-      );
       final overlay = BlockOverlay(
         isActive: () async => active,
         showOverlay: (String _) async {
@@ -113,17 +106,17 @@ void main() {
         },
       );
 
-      await overlay.show(packageName: blockedPackage, rule: blockingRule);
-      await overlay.show(packageName: otherPackage, rule: blockingRule);
-      await overlay.show(packageName: otherPackage, rule: otherRule);
+      await overlay.show(packageName: blockedPackage, ruleName: 'One launch');
+      await overlay.show(packageName: otherPackage, ruleName: 'One launch');
+      await overlay.show(packageName: otherPackage, ruleName: 'Different rule');
       await overlay.show(
         packageName: browser,
-        rule: webRule,
+        ruleName: 'No Reels',
         address: parseAddress('instagram.com/reels'),
       );
       await overlay.show(
         packageName: browser,
-        rule: webRule,
+        ruleName: 'No Reels',
         address: parseAddress('instagram.com/explore'),
       );
 
@@ -362,6 +355,51 @@ void main() {
     },
   );
 
+  test(
+    'a guarded package is blocked by strict mode ahead of its rules',
+    () async {
+      final foreground = FakeForegroundApp(
+        packageName: blockedPackage,
+        usage: const AppUsage(foregroundTime: Duration.zero, launches: 1),
+      );
+      final overlay = FakeBlockOverlay();
+      final engine = BlockingEngine(
+        foregroundApp: foreground,
+        overlay: overlay,
+        rules: const <BlockRule>[blockingRule],
+      );
+
+      engine.guardPackages(const <String>{blockedPackage});
+      await engine.tick(now);
+      expect(overlay.visible, isTrue);
+      expect(overlay.ruleName, 'Strict mode');
+      expect(overlay.packageName, blockedPackage);
+
+      engine.guardPackages(const <String>{});
+      await engine.tick(now);
+      expect(overlay.ruleName, 'One launch');
+    },
+  );
+
+  test('the recents screen is guarded by its class name', () async {
+    final foreground = FakeForegroundApp(packageName: 'com.example.launcher')
+      ..className = 'com.android.quickstep.RecentsActivity';
+    final overlay = FakeBlockOverlay();
+    final engine = BlockingEngine(foregroundApp: foreground, overlay: overlay);
+
+    await engine.tick(now);
+    expect(overlay.visible, isFalse);
+
+    engine.guardPackages(const <String>{}, recents: true);
+    await engine.tick(now);
+    expect(overlay.visible, isTrue);
+    expect(overlay.ruleName, 'Strict mode');
+
+    foreground.className = 'com.example.launcher.HomeActivity';
+    await engine.tick(now);
+    expect(overlay.visible, isFalse);
+  });
+
   group('web pages', () {
     test('a blocked page in the foreground browser shows its host', () async {
       final foreground = FakeForegroundApp(packageName: browser);
@@ -511,6 +549,7 @@ class FakeForegroundApp extends ForegroundApp {
   });
 
   String? packageName;
+  String? className;
   bool screenInteractive;
   AppUsage usage;
   final bool failOnUsageRead;
@@ -520,7 +559,11 @@ class FakeForegroundApp extends ForegroundApp {
   @override
   Future<ForegroundState> foregroundState(DateTime now) async {
     await stateGate;
-    return (packageName: packageName, screenInteractive: screenInteractive);
+    return (
+      packageName: packageName,
+      className: className,
+      screenInteractive: screenInteractive,
+    );
   }
 
   @override
@@ -544,14 +587,14 @@ class FakeBlockOverlay extends BlockOverlay {
   @override
   Future<void> show({
     required String packageName,
-    required BlockRule rule,
+    required String ruleName,
     WebAddress? address,
   }) async {
     showCalls++;
     visible = true;
     this.packageName = packageName;
     host = address?.host;
-    ruleName = rule.name;
+    this.ruleName = ruleName;
   }
 
   @override

@@ -297,6 +297,31 @@ void main() {
       orderedEquals(<String>['Zulu', 'Alpha', 'Mike']),
     );
   });
+
+  test('recovers after the shared handle is closed from elsewhere', () async {
+    final directory = await Directory.systemTemp.createTemp('serensync');
+    final path = '${directory.path}/serensync.db';
+    final fileStore = RuleStore(databasePath: path);
+    try {
+      await fileStore.insert(
+        const BlockRule(
+          id: 0,
+          name: 'Survivor',
+          packages: {'com.example.one'},
+          trigger: LaunchQuota(1),
+          enabled: true,
+        ),
+      );
+      // Same path, single instance: this closes the store's handle as well,
+      // as the blocking service's isolate can.
+      await (await databaseFactoryFfi.openDatabase(path)).close();
+
+      expect((await fileStore.readAll()).single.name, 'Survivor');
+    } finally {
+      await fileStore.close();
+      await directory.delete(recursive: true);
+    }
+  });
 }
 
 void _expectRule(

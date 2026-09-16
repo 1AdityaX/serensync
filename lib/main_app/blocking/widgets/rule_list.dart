@@ -13,11 +13,15 @@ class RuleList extends StatefulWidget {
     required this.ruleStore,
     required this.appService,
     required this.blockingService,
+    this.locked = false,
   });
 
   final RuleStore ruleStore;
   final AppService appService;
   final BlockingService blockingService;
+
+  /// While strict mode locks the rules, blocks can only be added or tightened.
+  final bool locked;
 
   @override
   State<RuleList> createState() => _RuleListState();
@@ -34,6 +38,7 @@ class _RuleListState extends State<RuleList> {
   }
 
   Future<void> _loadRules() async {
+    if (_loadError != null) setState(() => _loadError = null);
     try {
       final rules = await widget.ruleStore.readAll();
       if (!mounted) return;
@@ -54,6 +59,7 @@ class _RuleListState extends State<RuleList> {
           ruleStore: widget.ruleStore,
           appService: widget.appService,
           blockingService: widget.blockingService,
+          locked: widget.locked,
           rule: rule,
         ),
       ),
@@ -125,6 +131,18 @@ class _RuleListState extends State<RuleList> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text('Could not load your limits.'),
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Text(
+                '$_loadError',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: BlockingColors.textMuted,
+                ),
+              ),
+            ),
             const SizedBox(height: 8),
             TextButton(
               style: TextButton.styleFrom(
@@ -157,6 +175,23 @@ class _RuleListState extends State<RuleList> {
       padding: const EdgeInsets.all(16),
       children: [
         _CreateBlockButton(onPressed: () => _openEditor()),
+        if (widget.locked)
+          const Padding(
+            key: ValueKey('rules-locked'),
+            padding: EdgeInsets.fromLTRB(4, 16, 4, 0),
+            child: Row(
+              children: [
+                Icon(Icons.shield, size: 16, color: BlockingColors.accent),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Strict mode is on. Blocks can only be made stricter.',
+                    style: TextStyle(color: BlockingColors.textMuted),
+                  ),
+                ),
+              ],
+            ),
+          ),
         if (rules.isEmpty)
           const Padding(
             padding: EdgeInsets.only(top: 24),
@@ -170,6 +205,7 @@ class _RuleListState extends State<RuleList> {
           for (final rule in active)
             _BlockCard(
               rule: rule,
+              locked: widget.locked,
               onOpen: () => _openEditor(rule),
               onAction: (action) => _act(rule, action),
             ),
@@ -179,6 +215,7 @@ class _RuleListState extends State<RuleList> {
           for (final rule in inactive)
             _BlockCard(
               rule: rule,
+              locked: widget.locked,
               onOpen: () => _openEditor(rule),
               onAction: (action) => _act(rule, action),
             ),
@@ -237,11 +274,13 @@ class _SectionHeader extends StatelessWidget {
 class _BlockCard extends StatelessWidget {
   const _BlockCard({
     required this.rule,
+    required this.locked,
     required this.onOpen,
     required this.onAction,
   });
 
   final BlockRule rule;
+  final bool locked;
   final VoidCallback onOpen;
   final ValueChanged<_BlockAction> onAction;
 
@@ -307,7 +346,7 @@ class _BlockCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                _BlockMenu(rule: rule, onSelected: onAction),
+                _BlockMenu(rule: rule, locked: locked, onSelected: onAction),
               ],
             ),
           ),
@@ -322,9 +361,14 @@ enum _BlockAction { edit, pause, block, duplicate, delete }
 const _danger = Color(0xFFF28B82);
 
 class _BlockMenu extends StatelessWidget {
-  const _BlockMenu({required this.rule, required this.onSelected});
+  const _BlockMenu({
+    required this.rule,
+    required this.locked,
+    required this.onSelected,
+  });
 
   final BlockRule rule;
+  final bool locked;
   final ValueChanged<_BlockAction> onSelected;
 
   @override
@@ -342,12 +386,13 @@ class _BlockMenu extends StatelessWidget {
       onSelected: onSelected,
       itemBuilder: (_) => [
         _item(_BlockAction.edit, Icons.edit_outlined, 'Edit'),
-        if (rule.enabled)
-          _item(_BlockAction.pause, Icons.pause_circle_outline, 'Pause')
-        else
-          _item(_BlockAction.block, Icons.block, 'Block'),
+        if (!rule.enabled)
+          _item(_BlockAction.block, Icons.block, 'Block')
+        else if (!locked)
+          _item(_BlockAction.pause, Icons.pause_circle_outline, 'Pause'),
         _item(_BlockAction.duplicate, Icons.content_copy_outlined, 'Duplicate'),
-        _item(_BlockAction.delete, Icons.delete_outline, 'Delete', _danger),
+        if (!locked)
+          _item(_BlockAction.delete, Icons.delete_outline, 'Delete', _danger),
       ],
     );
   }

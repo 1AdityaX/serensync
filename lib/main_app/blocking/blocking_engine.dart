@@ -1,11 +1,16 @@
 import 'dart:async';
 
+import 'package:apps_handler/apps_handler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:usage_stats/usage_stats.dart';
 
 import '../pomodoro/pomodoro_alerts.dart';
 import '../pomodoro/pomodoro_session.dart';
 import '../pomodoro/pomodoro_store.dart';
+import '../strict/strict_guard.dart';
+import '../strict/strict_mode.dart';
+import '../strict/strict_mode_store.dart';
 import 'block_overlay.dart';
 import 'browser_watcher.dart';
 import 'foreground_app.dart';
@@ -21,6 +26,7 @@ const _idleNotification = (
   title: 'App limits are on',
   text: 'Blocking runs while this is showing.',
 );
+const _strictModeName = 'Strict mode';
 
 class BlockingEngine {
   BlockingEngine({
@@ -38,9 +44,12 @@ class BlockingEngine {
 
   List<BlockRule> _rules;
   Set<int> _forced = const <int>{};
+  Set<String> _guarded = const <String>{};
+  bool _guardRecents = false;
   final Map<String, WebAddress> _addresses = <String, WebAddress>{};
   Future<void> _queue = Future<void>.value();
   String? _previousPackage;
+  String? _foregroundClass;
   bool? _screenInteractive;
 
   Future<bool?> tick(DateTime now) => _serialized(() => _tick(now));
@@ -70,6 +79,13 @@ class BlockingEngine {
     _forced = Set<int>.unmodifiable(ruleIds);
   }
 
+  /// Screens strict mode blocks outright until the next call: the packages
+  /// given and, with [recents], the launcher's recent-apps screen.
+  void guardPackages(Set<String> packages, {bool recents = false}) {
+    _guarded = Set<String>.unmodifiable(packages);
+    _guardRecents = recents;
+  }
+
   Future<bool?> _tick(DateTime now) async {
     final foreground = await foregroundApp.foregroundState(now);
     if (!foreground.screenInteractive) {
@@ -94,6 +110,7 @@ class BlockingEngine {
       foregroundApp.invalidateUsage();
     }
     _previousPackage = packageName;
+    _foregroundClass = foreground.className;
     if (packageName == ownPackage) {
       await overlay.hide();
     } else {
@@ -105,6 +122,11 @@ class BlockingEngine {
   // Runs on every tick so a schedule or limit can start while the app stays
   // open; the usage read behind it is cached by the foreground app.
   Future<void> _evaluate(String packageName, DateTime now) async {
+    if (_guarded.contains(packageName) ||
+        (_guardRecents && isRecentsScreen(_foregroundClass))) {
+      await overlay.show(packageName: packageName, ruleName: _strictModeName);
+      return;
+    }
     final usage = await foregroundApp.todayUsage(packageName, now);
     var decision = decide(
       rules: _rules,
@@ -127,7 +149,7 @@ class BlockingEngine {
     if (decision is Block) {
       await overlay.show(
         packageName: packageName,
-        rule: decision.rule,
+        ruleName: decision.rule.name,
         address: blockedAddress,
       );
     } else {
@@ -165,14 +187,18 @@ void initializeBlockingService() {
   );
 }
 
-/// Whether the service has work: an enabled block, or a session in focus or
-/// on a break. A session waiting for a tap or finished needs nothing running.
+/// Whether the service has work: an enabled block, a session in focus or on
+/// a break, or a strict mode that guards packages. A session waiting for a
+/// tap or finished needs nothing running, nor does a strict mode that only
+/// locks the rules in the app.
 bool _enforcementWanted(
   List<BlockRule> rules,
   PomodoroSession? session,
+  StrictMode? strict,
   DateTime now,
 ) {
   if (rules.any((rule) => rule.enabled)) return true;
+  if (_strictGuards(strict, rules, now)) return true;
   return switch (session?.stateAt(now).phase) {
     PomodoroPhase.focus ||
     PomodoroPhase.shortBreak ||
@@ -181,25 +207,40 @@ bool _enforcementWanted(
   };
 }
 
+bool _strictGuards(StrictMode? strict, List<BlockRule> rules, DateTime now) {
+  return strict != null &&
+      strict.locks.any((lock) => lock != StrictLock.rules) &&
+      strictGuardsApply(
+        strict,
+        now: now,
+        schedulesRunning: schedulesRunning(rules, now),
+      );
+}
+
 Future<bool> _enforcementPermitted() async {
   final usageAccess = await UsageStats.checkUsagePermission() ?? false;
   return usageAccess && await FlutterForegroundTask.canDrawOverlays;
 }
 
 class BlockingService {
-  BlockingService({PomodoroStore? pomodoroStore})
-    : _pomodoroStore = pomodoroStore ?? PomodoroStore();
+  BlockingService({
+    PomodoroStore? pomodoroStore,
+    StrictModeStore? strictModeStore,
+  }) : _pomodoroStore = pomodoroStore ?? PomodoroStore(),
+       _strictModeStore = strictModeStore ?? StrictModeStore();
 
   final PomodoroStore _pomodoroStore;
+  final StrictModeStore _strictModeStore;
 
   Future<bool> get isRunning => FlutterForegroundTask.isRunningService;
 
   /// Starts or stops the service to match what there is to enforce. Call
-  /// after a block or a focus session changes.
+  /// after a block, a focus session, or strict mode changes.
   Future<void> sync(RuleStore ruleStore) async {
     final wanted = _enforcementWanted(
       await ruleStore.readAll(),
       await _pomodoroStore.readSession(),
+      await _strictModeStore.read(),
       DateTime.now(),
     );
     final running = await isRunning;
@@ -234,21 +275,27 @@ class BlockingTask extends TaskHandler {
     BlockingEngine? engine,
     RuleStore? ruleStore,
     PomodoroStore? pomodoroStore,
+    StrictModeStore? strictModeStore,
     BrowserWatcher? browserWatcher,
   }) : _engine = engine ?? BlockingEngine(),
        _ruleStore = ruleStore ?? RuleStore(),
        _pomodoroStore = pomodoroStore ?? PomodoroStore(),
+       _strictModeStore = strictModeStore ?? StrictModeStore(),
        _browserWatcher = browserWatcher ?? BrowserWatcher();
 
   final BlockingEngine _engine;
   final RuleStore _ruleStore;
   final PomodoroStore _pomodoroStore;
+  final StrictModeStore _strictModeStore;
   final BrowserWatcher _browserWatcher;
   StreamSubscription<BrowserAddress>? _addresses;
+  StreamSubscription<AppEvent>? _appChanges;
   bool _tickActive = false;
   Timer? _permissionCheck;
   List<BlockRule> _rules = const <BlockRule>[];
   PomodoroSession? _session;
+  StrictMode? _strict;
+  Map<String, DateTime> _installTimes = const <String, DateTime>{};
   PomodoroPhase? _phase;
   Timer? _phaseClock;
   ({String title, String text})? _notification;
@@ -259,6 +306,9 @@ class BlockingTask extends TaskHandler {
     if (!await _checkEnforcementPermissions()) return;
     _addresses = _browserWatcher.addresses().listen(
       (change) => unawaited(_engine.addressChanged(change, DateTime.now())),
+    );
+    _appChanges = AppsHandler.appChanges.listen(
+      (_) => unawaited(_refreshInstallTimes()),
     );
     _permissionCheck = Timer.periodic(_permissionCheckInterval, (_) {
       unawaited(_checkEnforcementPermissions());
@@ -284,6 +334,7 @@ class BlockingTask extends TaskHandler {
     _permissionCheck?.cancel();
     _phaseClock?.cancel();
     await _addresses?.cancel();
+    await _appChanges?.cancel();
     await _engine.overlay.hide();
   }
 
@@ -303,6 +354,7 @@ class BlockingTask extends TaskHandler {
       } else {
         await _showNotification(timestamp);
       }
+      await _applyStrict(timestamp);
       final screenInteractive = await _engine.tick(timestamp);
       if (screenInteractive != null) {
         await FlutterForegroundTask.updateService(
@@ -322,9 +374,38 @@ class BlockingTask extends TaskHandler {
     _rules = await _ruleStore.readAll();
     _engine.replaceRules(_rules);
     _session = await _pomodoroStore.readSession();
+    _strict = await _strictModeStore.read();
+    await _refreshInstallTimes();
+    await _applyStrict(DateTime.now());
     // A phase seen right after a user action is not a transition to alert.
     _phase = null;
     await _applySession(DateTime.now());
+  }
+
+  Future<void> _refreshInstallTimes() async {
+    if (!(_strict?.locks.contains(StrictLock.newApps) ?? false)) return;
+    try {
+      _installTimes = await readInstallTimes();
+    } on PlatformException {
+      // The last known times stay in force until the next install event.
+    }
+  }
+
+  // Timer and schedule conditions end on their own, so the guard is
+  // recomputed every tick from the clock, and the service stops once nothing
+  // is left to enforce.
+  Future<void> _applyStrict(DateTime now) async {
+    final strict = _strict;
+    final guards = _strictGuards(strict, _rules, now);
+    _engine.guardPackages(
+      guards
+          ? guardedPackages(strict!, installTimes: _installTimes)
+          : const <String>{},
+      recents: guards && strict!.locks.contains(StrictLock.recents),
+    );
+    if (!_enforcementWanted(_rules, _session, strict, now)) {
+      await FlutterForegroundTask.stopService();
+    }
   }
 
   Future<void> _applySession(DateTime now) async {
@@ -346,7 +427,7 @@ class BlockingTask extends TaskHandler {
     if (previous != null && phase != null && session != null) {
       await showPhaseAlert(phase, session);
     }
-    if (!_enforcementWanted(_rules, session, now)) {
+    if (!_enforcementWanted(_rules, session, _strict, now)) {
       await FlutterForegroundTask.stopService();
       return;
     }

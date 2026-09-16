@@ -11,6 +11,9 @@ import 'blocking/widgets/rule_list.dart';
 import 'pomodoro/pomodoro_store.dart';
 import 'pomodoro/pomodoro_tab.dart';
 import 'stats/stats_tab.dart';
+import 'strict/strict_mode.dart';
+import 'strict/strict_mode_store.dart';
+import 'strict/strict_tab.dart';
 
 enum _DashboardTab { pomodoro, blocks, strictMode, stats, settings }
 
@@ -22,6 +25,7 @@ class DashboardScreen extends StatefulWidget {
     required this.blockingService,
     required this.permissionStatus,
     required this.pomodoroStore,
+    required this.strictModeStore,
   });
 
   final AppService appService;
@@ -29,6 +33,7 @@ class DashboardScreen extends StatefulWidget {
   final BlockingService blockingService;
   final PermissionStatus permissionStatus;
   final PomodoroStore pomodoroStore;
+  final StrictModeStore strictModeStore;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -38,6 +43,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     with WidgetsBindingObserver {
   _DashboardTab _tab = _DashboardTab.blocks;
   PermissionState? _permissions;
+  bool _rulesLocked = false;
 
   @override
   void initState() {
@@ -52,8 +58,15 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   // Permissions change outside the app, so every return re-checks them and
-  // lets the blocking service follow.
+  // lets the blocking service follow. The rule lock is applied first so a
+  // failing permission check cannot leave the rules open.
   Future<void> _refresh() async {
+    final strict = await widget.strictModeStore.read();
+    final rulesLocked =
+        strict != null &&
+        strict.locks.contains(StrictLock.rules) &&
+        !strictModeEnded(strict, DateTime.now());
+    if (mounted) setState(() => _rulesLocked = rulesLocked);
     final permissions = await widget.permissionStatus.check();
     if (mounted) setState(() => _permissions = permissions);
     await widget.blockingService.sync(widget.ruleStore);
@@ -105,8 +118,14 @@ class _DashboardScreenState extends State<DashboardScreen>
         ruleStore: widget.ruleStore,
         appService: widget.appService,
         blockingService: widget.blockingService,
+        locked: _rulesLocked,
       ),
-      _DashboardTab.strictMode => const _ComingSoonTab(title: 'Strict mode'),
+      _DashboardTab.strictMode => StrictTab(
+        ruleStore: widget.ruleStore,
+        blockingService: widget.blockingService,
+        strictModeStore: widget.strictModeStore,
+        onChanged: () => unawaited(_refresh()),
+      ),
       _DashboardTab.stats => StatsTab(appService: widget.appService),
       _DashboardTab.settings => ListView(
         children: const [
@@ -125,8 +144,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         : !permissions.overlay
         ? RequiredPermission.overlay
         : null;
-    final enforces =
-        _tab == _DashboardTab.pomodoro || _tab == _DashboardTab.blocks;
+    final enforces = _tab != _DashboardTab.stats;
     if (missing == null || !enforces) return body;
     return Column(
       children: [
@@ -176,22 +194,6 @@ class _PermissionBanner extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _ComingSoonTab extends StatelessWidget {
-  const _ComingSoonTab({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        '$title is coming soon',
-        style: const TextStyle(color: Colors.white70),
       ),
     );
   }

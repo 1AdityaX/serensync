@@ -8,6 +8,7 @@ import 'package:serensync/main_app/blocking/rule.dart';
 import 'package:serensync/main_app/blocking/rule_editor_screen.dart';
 import 'package:serensync/main_app/blocking/rule_store.dart';
 import 'package:serensync/main_app/blocking/rules_screen.dart';
+import 'package:serensync/main_app/blocking/widgets/rule_list.dart';
 
 void main() {
   late FakeRuleStore ruleStore;
@@ -577,6 +578,83 @@ void main() {
     final schedule = ruleStore.rules.single.trigger as Schedule;
     expect(schedule.startMinute, 9 * 60);
     expect(schedule.endMinute, 17 * 60);
+  });
+  testWidgets('locked rules cannot be paused or deleted', (tester) async {
+    ruleStore.rules.add(_rule(id: 20, name: 'Locked', enabled: true));
+    ruleStore.rules.add(_rule(id: 21, name: 'Paused', enabled: false));
+    await tester.pumpWidget(
+      _TestApp(
+        child: Scaffold(
+          body: RuleList(
+            ruleStore: ruleStore,
+            appService: appService,
+            blockingService: blockingService,
+            locked: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('rules-locked')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('rule-menu-20')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('rule-edit')), findsOneWidget);
+    expect(find.byKey(const ValueKey('rule-duplicate')), findsOneWidget);
+    expect(find.byKey(const ValueKey('rule-pause')), findsNothing);
+    expect(find.byKey(const ValueKey('rule-delete')), findsNothing);
+    await tester.tapAt(Offset.zero);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('rule-menu-21')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('rule-block')), findsOneWidget);
+    expect(find.byKey(const ValueKey('rule-delete')), findsNothing);
+  });
+
+  testWidgets('a locked block saves only when it is tightened', (tester) async {
+    final rule = _rule(id: 22, name: 'Limit', enabled: true);
+    ruleStore.rules.add(rule);
+    // A phone-height surface, so the whole editor is laid out.
+    tester.view.physicalSize = const Size(800, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _TestApp(
+        child: RuleEditorScreen(
+          ruleStore: ruleStore,
+          appService: appService,
+          blockingService: blockingService,
+          permissionStatus: permissionStatus,
+          locked: true,
+          rule: rule,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    FilledButton save() =>
+        tester.widget(find.byKey(const ValueKey('rule-save')));
+    expect(find.byKey(const ValueKey('rule-locked')), findsOneWidget);
+    expect(save().onPressed, isNotNull);
+
+    await _openCondition(tester);
+    await tester.enterText(find.byKey(const ValueKey('usage-minutes')), '45');
+    await _closeCondition(tester);
+    expect(save().onPressed, isNull);
+    expect(find.textContaining('would loosen'), findsOneWidget);
+
+    await _openCondition(tester);
+    await tester.enterText(find.byKey(const ValueKey('usage-minutes')), '15');
+    await _closeCondition(tester);
+    expect(save().onPressed, isNotNull);
+    await tester.tap(find.byKey(const ValueKey('rule-save')));
+    await tester.pumpAndSettle();
+
+    expect(
+      (ruleStore.rules.single.trigger as UsageQuota).limit,
+      const Duration(minutes: 15),
+    );
+    expect(blockingService.syncs, 1);
   });
 }
 

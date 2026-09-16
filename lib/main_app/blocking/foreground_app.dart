@@ -2,7 +2,11 @@ import 'package:usage_stats/usage_stats.dart';
 
 import 'rule.dart';
 
-typedef ForegroundState = ({String? packageName, bool screenInteractive});
+typedef ForegroundState = ({
+  String? packageName,
+  String? className,
+  bool screenInteractive,
+});
 
 const _trailingWindow = Duration(seconds: 10);
 const _cacheDuration = Duration(seconds: 10);
@@ -15,6 +19,7 @@ const _keyguardHidden = 18;
 class ForegroundApp {
   final Map<String, _CachedUsage> _usageCache = <String, _CachedUsage>{};
   String? _foregroundPackage;
+  String? _foregroundClass;
   bool _isScreenInteractive = true;
   DateTime? _lastEventQuery;
   DateTime? _lastScreenEvent;
@@ -42,9 +47,11 @@ class ForegroundApp {
     }
     if (latest != null) {
       _foregroundPackage = latest.packageName;
+      _foregroundClass = latest.className;
     }
     return (
       packageName: _foregroundPackage,
+      className: _foregroundClass,
       screenInteractive: _isScreenInteractive,
     );
   }

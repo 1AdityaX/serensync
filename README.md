@@ -22,12 +22,21 @@ combines a quiet home screen with rules that interrupt distracting app use.
 - Pomodoro focus sessions that lock chosen blocks for each focus round, with
   adjustable focus, break and long-break lengths, a countdown in the
   notification shade and an alert when a phase ends
-- Foreground blocking service that starts by itself while a block is enabled
-  or a focus session runs, and restarts after boot and app updates
+- Strict mode that locks blocks behind a PIN, a charger, a timer, your
+  schedules, or any combination, with an optional cooldown and an emergency
+  unlock; while on, blocks can only be tightened, and the Settings app, the
+  recent-apps screen, and newly installed apps can be blocked, while a
+  device-administrator registration keeps the app installed
+- Foreground blocking service that starts by itself while a block is enabled,
+  a focus session runs, or strict mode guards apps, and restarts after boot
+  and app updates
 
-SerenSync deliberately has no accounts, analytics, backend, uninstall
-protection, or non-Android platform support. Browsing time is not measured,
-so usage and launch limits block their websites and keywords all day.
+SerenSync deliberately has no accounts, analytics, backend, or non-Android
+platform support. Browsing time is not measured, so usage and launch limits
+block their websites and keywords all day. Strict mode's uninstall lock uses
+the legacy device-administrator API with no policies; Android still lets the
+admin be removed from Settings, which is why that lock always turns on the
+Settings lock, and nothing stops Safe mode or a computer with developer tools.
 
 ## Project layout
 
@@ -38,6 +47,7 @@ lib/
   home/        launcher home screen and shortcuts
   onboarding/  first-open intro and permission walkthrough
   pomodoro/    focus sessions, their persistence and the phase alert
+  strict/      strict mode model, persistence, guarded packages, and tab
 ```
 
 The main product logic lives in `lib/main_app/blocking/rule.dart`. It is pure
@@ -82,6 +92,7 @@ recovery, and battery behavior still require a physical Android device.
 | `RECEIVE_BOOT_COMPLETED` | Restart blocking after reboot |
 | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Reduce background process killing |
 | `BIND_ACCESSIBILITY_SERVICE` | Read the address bar of supported browsers for website and keyword blocks |
+| `BIND_DEVICE_ADMIN` (receiver) | Keep SerenSync installed while strict mode's uninstall lock is on |
 | `VIBRATE` | Buzz when a focus round or break ends |
 
 Usage data stays on the device.

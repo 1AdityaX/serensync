@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../apps/app_service.dart';
 import '../../apps/installed_app.dart';
+import '../strict/strict_mode.dart';
 import 'blocking_colors.dart';
 import 'blocking_engine.dart';
 import 'onboarding/permission_status.dart';
@@ -20,12 +21,17 @@ class RuleEditorScreen extends StatefulWidget {
   final PermissionStatus permissionStatus;
   final BlockRule? rule;
 
+  /// While strict mode locks the rules, an existing block saves only when
+  /// the change tightens it.
+  final bool locked;
+
   RuleEditorScreen({
     super.key,
     required this.ruleStore,
     required this.appService,
     required this.blockingService,
     PermissionStatus? permissionStatus,
+    this.locked = false,
     this.rule,
   }) : permissionStatus = permissionStatus ?? PermissionStatus();
 
@@ -79,7 +85,13 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
 
   bool get _blocksWeb => _websites.isNotEmpty || _keywords.isNotEmpty;
 
-  bool get _canSave => !_saving && (_packages.isNotEmpty || _blocksWeb);
+  bool get _loosens {
+    final existing = widget.rule;
+    return widget.locked && existing != null && !tightens(existing, _rule());
+  }
+
+  bool get _canSave =>
+      !_saving && (_packages.isNotEmpty || _blocksWeb) && !_loosens;
 
   String get _derivedName {
     final names = [
@@ -99,16 +111,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
       _saveError = false;
     });
     final existingRule = widget.rule;
-    final name = _nameController.text.trim();
-    final rule = BlockRule(
-      id: existingRule?.id ?? 0,
-      name: name.isEmpty ? _derivedName : name,
-      packages: _packages,
-      websites: _websites,
-      keywords: _keywords,
-      trigger: _trigger,
-      enabled: existingRule?.enabled ?? true,
-    );
+    final rule = _rule();
     try {
       if (existingRule == null) {
         await widget.ruleStore.insert(rule);
@@ -124,6 +127,20 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
         _saveError = true;
       });
     }
+  }
+
+  BlockRule _rule() {
+    final existingRule = widget.rule;
+    final name = _nameController.text.trim();
+    return BlockRule(
+      id: existingRule?.id ?? 0,
+      name: name.isEmpty ? _derivedName : name,
+      packages: _packages,
+      websites: _websites,
+      keywords: _keywords,
+      trigger: _trigger,
+      enabled: existingRule?.enabled ?? true,
+    );
   }
 
   Future<void> _editCondition() async {
@@ -228,6 +245,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Comparing schedules walks a whole week, so it happens once per build.
+    final loosens = _loosens;
     return Scaffold(
       backgroundColor: BlockingColors.background,
       appBar: AppBar(
@@ -245,6 +264,18 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
           const Divider(color: Colors.white12),
           const SizedBox(height: 24),
           _blockingSection(),
+          if (widget.locked && widget.rule != null) ...[
+            const SizedBox(height: 20),
+            _Note(
+              key: const ValueKey('rule-locked'),
+              icon: Icons.shield,
+              message: loosens
+                  ? 'Strict mode is on. This change would loosen the block, '
+                        'so it cannot be saved.'
+                  : 'Strict mode is on. You can add to this block or tighten '
+                        'it, but not loosen it.',
+            ),
+          ],
           if (_saveError) ...[
             const SizedBox(height: 20),
             const _Note(
@@ -254,7 +285,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
           ],
         ],
       ),
-      bottomNavigationBar: _bottomAction(),
+      bottomNavigationBar: _bottomAction(
+        _saving || loosens || (_packages.isEmpty && !_blocksWeb),
+      ),
     );
   }
 
@@ -462,7 +495,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
     );
   }
 
-  Widget _bottomAction() {
+  Widget _bottomAction(bool disabled) {
     return SafeArea(
       top: false,
       child: Container(
@@ -470,7 +503,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
         child: FilledButton(
           key: const ValueKey('rule-save'),
-          onPressed: _canSave ? _save : null,
+          onPressed: disabled ? null : _save,
           style: FilledButton.styleFrom(
             minimumSize: const Size.fromHeight(58),
             backgroundColor: BlockingColors.accent,
@@ -606,6 +639,7 @@ class _Note extends StatelessWidget {
   final Widget? action;
 
   const _Note({
+    super.key,
     this.icon = Icons.info_outline,
     required this.message,
     this.action,

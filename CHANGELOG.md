@@ -9,6 +9,10 @@ and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Strict mode with PIN, charger, timer, and schedule unlock conditions, an
+  optional cooldown, an emergency unlock, and locks for blocks, the Settings
+  app, the recent-apps screen, newly installed apps, and uninstalling through
+  a device-administrator registration.
 - Pomodoro focus sessions that lock chosen blocks during focus, with a
   notification countdown and an alert when a phase ends.
 - First-open intro with a short story and one screen per permission, shown

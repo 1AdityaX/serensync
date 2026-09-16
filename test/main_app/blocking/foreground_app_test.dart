@@ -57,6 +57,22 @@ void main() {
     expect(state.screenInteractive, isFalse);
   });
 
+  test('foreground state carries the resumed activity class', () async {
+    events = <Map<String, String?>>[
+      _event(
+        type: 1,
+        at: now,
+        packageName: 'com.example.launcher',
+        className: 'com.android.quickstep.RecentsActivity',
+      ),
+    ];
+
+    final state = await ForegroundApp().foregroundState(now);
+
+    expect(state.packageName, 'com.example.launcher');
+    expect(state.className, 'com.android.quickstep.RecentsActivity');
+  });
+
   test('screen state persists when the next event window is empty', () async {
     events = <Map<String, String?>>[_event(type: 17, at: now)];
     final foreground = ForegroundApp();
@@ -192,12 +208,13 @@ Map<String, String?> _event({
   required int type,
   required DateTime at,
   String? packageName,
+  String? className,
 }) {
   return <String, String?>{
     'eventType': '$type',
     'timeStamp': '${at.millisecondsSinceEpoch}',
     'packageName': packageName,
-    'className': null,
+    'className': className,
   };
 }
 

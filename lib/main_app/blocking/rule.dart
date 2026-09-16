@@ -103,7 +103,7 @@ Decision decide({
     if (!rule.enabled) continue;
 
     final blocks = switch (rule.trigger) {
-      final Schedule schedule => _scheduleBlocks(schedule, now),
+      final Schedule schedule => scheduleActive(schedule, now),
       final UsageQuota quota => usage.foregroundTime >= quota.limit,
       final LaunchQuota quota => usage.launches >= quota.limit,
     };
@@ -130,7 +130,7 @@ Decision decideWeb({
     // Browsing time is not measured, so usage and launch limits block their
     // websites and keywords outright.
     final blocks = switch (rule.trigger) {
-      final Schedule schedule => _scheduleBlocks(schedule, now),
+      final Schedule schedule => scheduleActive(schedule, now),
       UsageQuota() || LaunchQuota() => true,
     };
 
@@ -232,7 +232,7 @@ bool _matchesAddress(BlockRule rule, WebAddress address) {
       rule.keywords.any(address.url.contains);
 }
 
-bool _scheduleBlocks(Schedule schedule, DateTime now) {
+bool scheduleActive(Schedule schedule, DateTime now) {
   if (schedule.allDay) return schedule.weekdays.contains(now.weekday);
   return schedule.times.any(
     (time) => _timeBlocks(time, schedule.weekdays, now),

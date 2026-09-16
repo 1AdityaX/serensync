@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="accessibility_service_description">Reads the address bar of supported browsers so SerenSync can block the websites and keywords in your blocks. Browsing data stays on the device.</string>
+    <string name="device_admin_label">SerenSync strict mode</string>
+    <string name="device_admin_description">Keeps SerenSync installed while strict mode is on. Nothing else is controlled.</string>
 </resources>

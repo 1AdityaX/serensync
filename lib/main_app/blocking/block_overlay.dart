@@ -28,13 +28,13 @@ class BlockOverlay {
   final void Function() _launchApp;
   String? _visiblePackage;
   String? _visibleHost;
-  BlockRule? _visibleRule;
+  String? _visibleRuleName;
 
-  /// Shows the block screen for [rule] over [packageName]. Pass [address]
-  /// when a page inside the app is what the rule blocks.
+  /// Shows the block screen named after [ruleName] over [packageName]. Pass
+  /// [address] when a page inside the app is what is blocked.
   Future<void> show({
     required String packageName,
-    required BlockRule rule,
+    required String ruleName,
     WebAddress? address,
   }) async {
     final host = address?.host ?? '';
@@ -42,12 +42,12 @@ class BlockOverlay {
     if (active &&
         packageName == _visiblePackage &&
         host == _visibleHost &&
-        identical(rule, _visibleRule)) {
+        ruleName == _visibleRuleName) {
       return;
     }
 
     if (!active) {
-      await _showOverlay(rule.name);
+      await _showOverlay(ruleName);
       if (!await _waitUntilActive()) {
         _launchApp();
         return;
@@ -55,12 +55,12 @@ class BlockOverlay {
     }
     await _shareData(<String, String>{
       'packageName': packageName,
-      'ruleName': rule.name,
+      'ruleName': ruleName,
       'host': host,
     });
     _visiblePackage = packageName;
     _visibleHost = host;
-    _visibleRule = rule;
+    _visibleRuleName = ruleName;
   }
 
   Future<bool> _waitUntilActive() async {
@@ -78,7 +78,7 @@ class BlockOverlay {
   Future<void> hide() async {
     _visiblePackage = null;
     _visibleHost = null;
-    _visibleRule = null;
+    _visibleRuleName = null;
     if (await _isActive()) {
       await _closeOverlay();
     }

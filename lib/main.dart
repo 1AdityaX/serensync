@@ -14,6 +14,7 @@ import 'main_app/dashboard_screen.dart';
 import 'main_app/onboarding/onboarding_screen.dart';
 import 'main_app/onboarding/onboarding_store.dart';
 import 'main_app/pomodoro/pomodoro_store.dart';
+import 'main_app/strict/strict_mode_store.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,6 +36,7 @@ class MyApp extends StatelessWidget {
   final PermissionStatus permissionStatus;
   final BlockingService blockingService;
   final PomodoroStore pomodoroStore;
+  final StrictModeStore strictModeStore;
 
   MyApp({
     super.key,
@@ -45,13 +47,15 @@ class MyApp extends StatelessWidget {
     PermissionStatus? permissionStatus,
     BlockingService? blockingService,
     PomodoroStore? pomodoroStore,
+    StrictModeStore? strictModeStore,
   }) : appService = appService ?? AppService(),
        launcherController = launcherController ?? LauncherController(),
        ruleStore = ruleStore ?? RuleStore(),
        onboardingStore = onboardingStore ?? OnboardingStore(),
        permissionStatus = permissionStatus ?? PermissionStatus(),
        blockingService = blockingService ?? BlockingService(),
-       pomodoroStore = pomodoroStore ?? PomodoroStore();
+       pomodoroStore = pomodoroStore ?? PomodoroStore(),
+       strictModeStore = strictModeStore ?? StrictModeStore();
 
   @override
   Widget build(BuildContext context) {
@@ -81,6 +85,7 @@ class MyApp extends StatelessWidget {
         permissionStatus: permissionStatus,
         blockingService: blockingService,
         pomodoroStore: pomodoroStore,
+        strictModeStore: strictModeStore,
       ),
     );
   }
@@ -94,6 +99,7 @@ class MainScreen extends StatefulWidget {
   final PermissionStatus permissionStatus;
   final BlockingService blockingService;
   final PomodoroStore pomodoroStore;
+  final StrictModeStore strictModeStore;
 
   const MainScreen({
     super.key,
@@ -104,6 +110,7 @@ class MainScreen extends StatefulWidget {
     required this.permissionStatus,
     required this.blockingService,
     required this.pomodoroStore,
+    required this.strictModeStore,
   });
 
   @override
@@ -162,6 +169,7 @@ class _MainScreenState extends State<MainScreen> {
         blockingService: widget.blockingService,
         permissionStatus: widget.permissionStatus,
         pomodoroStore: widget.pomodoroStore,
+        strictModeStore: widget.strictModeStore,
       );
     }
     return LauncherScreen(

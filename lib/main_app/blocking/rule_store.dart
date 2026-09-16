@@ -13,66 +13,71 @@ class RuleStore {
   final String? databasePath;
   Future<Database>? _database;
 
-  Future<List<BlockRule>> readAll() async {
-    final database = await _getDatabase();
-    final rows = await database.query('rules', orderBy: 'id ASC');
-    final packages = await _readTargets(database, 'rule_packages', 'package');
-    final websites = await _readTargets(database, 'rule_websites', 'website');
-    final keywords = await _readTargets(database, 'rule_keywords', 'keyword');
+  Future<List<BlockRule>> readAll() {
+    return _run((database) async {
+      final rows = await database.query('rules', orderBy: 'id ASC');
+      final packages = await _readTargets(database, 'rule_packages', 'package');
+      final websites = await _readTargets(database, 'rule_websites', 'website');
+      final keywords = await _readTargets(database, 'rule_keywords', 'keyword');
 
-    final rules = <BlockRule>[];
-    for (final row in rows) {
-      final id = row['id'] as int;
-      rules.add(
-        BlockRule(
-          id: id,
-          name: row['name'] as String,
-          packages: packages[id] ?? <String>{},
-          websites: websites[id] ?? <String>{},
-          keywords: keywords[id] ?? <String>{},
-          trigger: _decodeTrigger(
-            row['trigger_type'] as String,
-            row['trigger_json'] as String,
+      final rules = <BlockRule>[];
+      for (final row in rows) {
+        final id = row['id'] as int;
+        rules.add(
+          BlockRule(
+            id: id,
+            name: row['name'] as String,
+            packages: packages[id] ?? <String>{},
+            websites: websites[id] ?? <String>{},
+            keywords: keywords[id] ?? <String>{},
+            trigger: _decodeTrigger(
+              row['trigger_type'] as String,
+              row['trigger_json'] as String,
+            ),
+            enabled: (row['enabled'] as int) == 1,
           ),
-          enabled: (row['enabled'] as int) == 1,
-        ),
-      );
-    }
-    return rules;
-  }
-
-  Future<int> insert(BlockRule rule) async {
-    final database = await _getDatabase();
-    return database.transaction((transaction) async {
-      final id = await transaction.insert('rules', _ruleValues(rule));
-      await _insertTargets(transaction, id, rule);
-      return id;
-    });
-  }
-
-  Future<void> update(BlockRule rule) async {
-    final database = await _getDatabase();
-    await database.transaction((transaction) async {
-      await transaction.update(
-        'rules',
-        _ruleValues(rule),
-        where: 'id = ?',
-        whereArgs: <Object?>[rule.id],
-      );
-      for (final table in _targetTables) {
-        await transaction.delete(
-          table,
-          where: 'rule_id = ?',
-          whereArgs: <Object?>[rule.id],
         );
       }
-      await _insertTargets(transaction, rule.id, rule);
+      return rules;
     });
   }
 
-  Future<void> delete(int id) async {
-    final database = await _getDatabase();
-    await database.delete('rules', where: 'id = ?', whereArgs: <Object?>[id]);
+  Future<int> insert(BlockRule rule) {
+    return _run(
+      (database) => database.transaction((transaction) async {
+        final id = await transaction.insert('rules', _ruleValues(rule));
+        await _insertTargets(transaction, id, rule);
+        return id;
+      }),
+    );
+  }
+
+  Future<void> update(BlockRule rule) {
+    return _run(
+      (database) => database.transaction((transaction) async {
+        await transaction.update(
+          'rules',
+          _ruleValues(rule),
+          where: 'id = ?',
+          whereArgs: <Object?>[rule.id],
+        );
+        for (final table in _targetTables) {
+          await transaction.delete(
+            table,
+            where: 'rule_id = ?',
+            whereArgs: <Object?>[rule.id],
+          );
+        }
+        await _insertTargets(transaction, rule.id, rule);
+      }),
+    );
+  }
+
+  Future<void> delete(int id) {
+    return _run(
+      (database) =>
+          database.delete('rules', where: 'id = ?', whereArgs: <Object?>[id]),
+    );
   }
 
   Future<void> close() async {
@@ -83,8 +88,26 @@ class RuleStore {
     }
   }
 
-  Future<Database> _getDatabase() {
-    return _database ??= _openDatabase();
+  // The native handle is shared with the blocking service's isolate and can
+  // be closed from there; drop it and open once more. A failed open is not
+  // cached either, so a retry gets a fresh attempt.
+  Future<T> _run<T>(Future<T> Function(Database database) work) async {
+    try {
+      return await work(await _getDatabase());
+    } on DatabaseException catch (error) {
+      if (!error.isDatabaseClosedError()) rethrow;
+      _database = null;
+      return work(await _getDatabase());
+    }
+  }
+
+  Future<Database> _getDatabase() async {
+    try {
+      return await (_database ??= _openDatabase());
+    } catch (_) {
+      _database = null;
+      rethrow;
+    }
   }
 
   Future<Database> _openDatabase() async {
