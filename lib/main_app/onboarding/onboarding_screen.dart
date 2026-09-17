@@ -257,7 +257,8 @@ _PermissionCopy _copy(RequiredPermission permission) {
       scene: PhoneScene.browser,
       why:
           'Reads the address bar in supported browsers so websites and '
-          'keywords can be blocked too. Optional: only those blocks need it.',
+          'keywords can be blocked, and lets strict mode shut Settings and '
+          'installers the instant they open. Optional for app blocks alone.',
       how:
           'Under Downloaded apps, choose SerenSync and switch it on. If the '
           'switch is greyed out, open App info, tap the menu and allow '

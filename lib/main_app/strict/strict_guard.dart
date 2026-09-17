@@ -20,7 +20,12 @@ const installerPackages = <String>{
   'com.samsung.android.packageinstaller',
   'com.miui.packageinstaller',
   'com.miui.global.packageinstaller',
+  'com.oplus.packageinstaller',
 };
+
+/// The admin's label as Settings shows it on the deactivation screen. Keep
+/// in sync with device_admin_label in android/app/src/main/res/values/strings.xml.
+const deviceAdminLabel = 'SerenSync strict mode';
 
 /// Packages an active strict mode blocks outright.
 Set<String> guardedPackages(
@@ -37,9 +42,8 @@ Set<String> guardedPackages(
   };
 }
 
-/// The recents screens that show while a third-party launcher such as
-/// SerenSync is the home app. A stock launcher draws recents inside its own
-/// activity instead, which nothing here can tell apart.
+/// Launcher activities that draw the recents screen; a launcher that draws
+/// recents inside its home activity cannot be told apart from home.
 const recentsActivities = <String>{
   'com.android.quickstep.RecentsActivity',
   'com.miui.home.recents.RecentsActivity',

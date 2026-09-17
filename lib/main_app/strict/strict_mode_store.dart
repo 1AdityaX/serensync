@@ -13,7 +13,9 @@ class StrictModeStore {
   Future<StrictMode?> read() async {
     final json = await SharedPreferencesAsync().getString(_modeKey);
     if (json == null) return null;
-    return StrictMode.fromJson(jsonDecode(json) as Map<String, Object?>);
+    final strict = strictModeFromJson(jsonDecode(json) as Map<String, Object?>);
+    if (strict == null) await write(null);
+    return strict;
   }
 
   Future<void> write(StrictMode? strict) {

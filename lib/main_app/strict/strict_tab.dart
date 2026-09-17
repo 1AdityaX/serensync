@@ -1,32 +1,44 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:battery_plus/battery_plus.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../blocking/blocking_colors.dart';
 import '../blocking/blocking_engine.dart';
 import '../blocking/rule.dart';
 import '../blocking/rule_store.dart';
+import '../blocking/widgets/note.dart';
+import '../pomodoro/timer_dial.dart';
 import 'strict_mode.dart';
 import 'strict_mode_store.dart';
 import 'uninstall_guard.dart';
 
-const _timerLengths = <Duration>[
+const _caveat =
+    'Nothing here stops Safe mode or a computer with developer tools.';
+const _adminRefused =
+    'Blocking uninstalls needs SerenSync as a device admin. Allow it when '
+    'Android asks, or leave that lock off.';
+const _minTimer = Duration(minutes: 5);
+const _maxLength = Duration(days: 99);
+const _quickTimers = <Duration>[
   Duration(hours: 1),
   Duration(hours: 3),
   Duration(hours: 8),
-  Duration(hours: 24),
+  Duration(days: 1),
   Duration(days: 3),
   Duration(days: 7),
 ];
-const _cooldowns = <Duration?>[
-  null,
+const _quickCooldowns = <Duration>[
+  Duration.zero,
   Duration(minutes: 10),
   Duration(hours: 1),
-  Duration(hours: 24),
+  Duration(days: 1),
 ];
+const _pageTurn = Duration(milliseconds: 320);
+
+/// The setup walks through these; the timer and PIN steps are exclusive.
+enum _Step { end, timer, pin, cooldown, locks, review }
 
 class StrictTab extends StatefulWidget {
   const StrictTab({
@@ -35,7 +47,6 @@ class StrictTab extends StatefulWidget {
     required this.blockingService,
     required this.strictModeStore,
     required this.onChanged,
-    this.isCharging,
     this.uninstallGuard,
   });
 
@@ -43,12 +54,9 @@ class StrictTab extends StatefulWidget {
   final BlockingService blockingService;
   final StrictModeStore strictModeStore;
 
-  /// Called after strict mode starts or ends, so the rest of the app can
-  /// pick up the new locks.
+  /// Called after strict mode starts, changes or ends, so the rest of the app
+  /// can pick up the new locks.
   final VoidCallback onChanged;
-
-  /// Defaults to the battery state; tests inject a value.
-  final Future<bool> Function()? isCharging;
 
   /// Defaults to the device administrator; tests inject a fake.
   final UninstallGuard? uninstallGuard;
@@ -57,31 +65,23 @@ class StrictTab extends StatefulWidget {
   State<StrictTab> createState() => _StrictTabState();
 }
 
-// A phone at its charge limit is plugged in without charging.
-Future<bool> _batteryCharging() async {
-  return switch (await Battery().batteryState) {
-    BatteryState.charging ||
-    BatteryState.full ||
-    BatteryState.connectedNotCharging => true,
-    _ => false,
-  };
-}
-
 class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
-  final TextEditingController _pin = TextEditingController();
-  final TextEditingController _pinConfirm = TextEditingController();
   late final UninstallGuard _uninstallGuard =
       widget.uninstallGuard ?? UninstallGuard();
-  final Set<UnlockCondition> _conditions = {UnlockCondition.timer};
-  final Set<StrictLock> _locks = {StrictLock.rules};
-  Duration _timerLength = _timerLengths.first;
-  Duration? _cooldown;
-  String? _activationMessage;
+  final PageController _pages = PageController();
+  final Set<StrictLock> _locks = {};
+  bool _timed = true;
+  Duration _timerLength = const Duration(hours: 1);
+  Duration _cooldown = Duration.zero;
+  String _pinEntry = '';
+  String? _pinFirst;
+  String? _pin;
+  bool _pinMismatch = false;
+  int _stepIndex = 0;
+  String? _message;
   bool _loaded = false;
   StrictMode? _strict;
-  List<BlockRule> _rules = const [];
   bool _emergencyUsed = false;
-  String? _unlockMessage;
   Timer? _ticker;
 
   @override
@@ -100,35 +100,40 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _ticker?.cancel();
-    _pin.dispose();
-    _pinConfirm.dispose();
+    _pages.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
     final strict = await widget.strictModeStore.read();
-    final rules = await widget.ruleStore.readAll();
     final emergencyUsed = await widget.strictModeStore.emergencyUsed;
     if (!mounted) return;
     setState(() {
       _strict = strict;
-      _rules = rules;
       _emergencyUsed = emergencyUsed;
       _loaded = true;
     });
     _syncTicker();
   }
 
-  // Countdowns for the timer and the cooldown redraw once a second.
-  void _syncTicker() {
+  bool get _counting {
     final strict = _strict;
-    final until = strict?.until;
-    final counting =
-        strict != null &&
-        ((until != null && DateTime.now().isBefore(until)) ||
-            strict.unlockRequestedAt != null);
-    if (counting) {
+    if (strict == null) return false;
+    final now = DateTime.now();
+    if (strict.timed) return now.isBefore(strict.until!);
+    return strict.unlockRequestedAt != null &&
+        cooldownRemaining(strict, now)! > Duration.zero;
+  }
+
+  // Countdowns for the timer and the cooldown redraw once a second, until
+  // the last one runs out.
+  void _syncTicker() {
+    if (_counting) {
       _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!_counting) {
+          _ticker?.cancel();
+          _ticker = null;
+        }
         setState(() {});
       });
     } else {
@@ -137,17 +142,91 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
     }
   }
 
-  Set<StrictLock> get _effectiveLocks =>
-      effectiveLocks(_locks, conditions: _conditions, cooldown: _cooldown);
+  List<_Step> get _steps => [
+    _Step.end,
+    if (_timed) _Step.timer,
+    if (!_timed) ...[_Step.pin, _Step.cooldown],
+    _Step.locks,
+    _Step.review,
+  ];
 
+  Duration? get _cooldownOrNull =>
+      !_timed && _cooldown > Duration.zero ? _cooldown : null;
+
+  Set<StrictLock> get _effectiveLocks =>
+      effectiveLocks(_locks, timed: _timed, cooldown: _cooldownOrNull);
+
+  /// Settings would be locked even without being chosen.
   bool get _settingsForced => effectiveLocks(
-    _locks.difference(const {StrictLock.settings}),
-    conditions: _conditions,
-    cooldown: _cooldown,
+    _locks.difference({StrictLock.settings}),
+    timed: _timed,
+    cooldown: _cooldownOrNull,
   ).contains(StrictLock.settings);
 
-  bool get _hasScheduleRule =>
-      _rules.any((rule) => rule.enabled && rule.trigger is Schedule);
+  /// Wording for [_settingsForced], in the order the model checks.
+  List<String> get _forcedSettingsCauses => [
+    if (_timed) 'the timer',
+    if (_cooldownOrNull != null) 'the cooldown',
+    if (_locks.contains(StrictLock.uninstall)) 'the uninstall lock',
+    if (_locks.contains(StrictLock.newApps)) 'the new-apps lock',
+  ];
+
+  bool get _pinReady =>
+      _pinEntry.length >= 4 ||
+      (_pin != null && _pinFirst == null && _pinEntry.isEmpty);
+
+  void _goTo(int index) {
+    setState(() => _stepIndex = index);
+    unawaited(
+      _pages.animateToPage(
+        index,
+        duration: _duration(context, _pageTurn.inMilliseconds),
+        curve: Curves.easeOutCubic,
+      ),
+    );
+  }
+
+  void _next() {
+    if (_steps[_stepIndex] == _Step.pin && !_confirmPin()) return;
+    _goTo(_stepIndex + 1);
+  }
+
+  /// First pass stores the entry, second pass has to match it.
+  bool _confirmPin() {
+    if (_pinEntry.isEmpty && _pin != null) return true;
+    final first = _pinFirst;
+    if (first == null) {
+      setState(() {
+        _pinFirst = _pinEntry;
+        _pinEntry = '';
+        _pinMismatch = false;
+      });
+      return false;
+    }
+    if (first == _pinEntry) {
+      setState(() {
+        _pin = first;
+        _pinFirst = null;
+        _pinEntry = '';
+      });
+      return true;
+    }
+    setState(() {
+      _pinFirst = null;
+      _pinEntry = '';
+      _pinMismatch = true;
+    });
+    return false;
+  }
+
+  void _back() {
+    setState(() {
+      _pinFirst = null;
+      _pinEntry = '';
+      _pinMismatch = false;
+    });
+    _goTo(_stepIndex - 1);
+  }
 
   Future<void> _write(StrictMode? strict) async {
     final previous = _strict;
@@ -161,80 +240,74 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
     if (!mounted) return;
     setState(() {
       _strict = strict;
-      _unlockMessage = null;
-      _activationMessage = null;
+      _message = null;
     });
     _syncTicker();
   }
-
-  bool get _pinValid =>
-      RegExp(r'^\d{4,8}$').hasMatch(_pin.text) && _pin.text == _pinConfirm.text;
-
-  bool get _canActivate =>
-      _conditions.isNotEmpty &&
-      _effectiveLocks.isNotEmpty &&
-      (!_conditions.contains(UnlockCondition.pin) || _pinValid);
 
   Future<void> _activate() async {
     final locks = _effectiveLocks;
     if (locks.contains(StrictLock.uninstall) &&
         !await _uninstallGuard.activate()) {
-      if (!mounted) return;
-      setState(
-        () => _activationMessage =
-            'Blocking uninstalls needs SerenSync as a device admin. Allow '
-            'it when Android asks, or turn that lock off.',
-      );
+      if (mounted) setState(() => _message = _adminRefused);
       return;
     }
     final now = DateTime.now();
     await _write(
       StrictMode(
-        conditions: Set.of(_conditions),
         locks: locks,
         activatedAt: now,
-        until: _conditions.contains(UnlockCondition.timer)
-            ? now.add(_timerLength)
-            : null,
-        cooldown: _cooldown,
-        pin: _conditions.contains(UnlockCondition.pin)
-            ? PinHash.create(_pin.text, Random.secure())
-            : null,
+        until: _timed ? now.add(_timerLength) : null,
+        pin: _timed ? null : PinHash.create(_pin!, Random.secure()),
+        cooldown: _cooldownOrNull,
       ),
     );
-    _pin.clear();
-    _pinConfirm.clear();
+    if (!mounted) return;
+    setState(() {
+      _pin = null;
+      _stepIndex = 0;
+    });
+    _pages.jumpToPage(0);
+  }
+
+  /// Locks can only be added while strict mode runs, so each one is confirmed.
+  Future<void> _addLock(StrictMode strict, StrictLock lock) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => _ConfirmLock(lock),
+    );
+    if (!(confirmed ?? false) || !mounted) return;
+    if (lock == StrictLock.uninstall && !await _uninstallGuard.activate()) {
+      if (mounted) setState(() => _message = _adminRefused);
+      return;
+    }
+    await _write(
+      strict.withLocks(
+        effectiveLocks(
+          {...strict.locks, lock},
+          timed: strict.timed,
+          cooldown: strict.cooldown,
+        ),
+      ),
+    );
   }
 
   Future<void> _unlock(StrictMode strict) async {
-    final now = DateTime.now();
-    String? pin;
-    if (strict.conditions.contains(UnlockCondition.pin)) {
-      pin = await _askPin();
-      if (pin == null || !mounted) return;
-    }
-    final unmet = unmetConditions(
-      strict,
-      now: now,
-      charging:
-          strict.conditions.contains(UnlockCondition.charger) &&
-          await (widget.isCharging ?? _batteryCharging)(),
-      pinEntered: pin != null && strict.pin!.matches(pin),
-      schedulesRunning: schedulesRunning(_rules, now),
-    );
-    if (unmet.isEmpty) {
-      await _write(null);
-      return;
-    }
-    if (!mounted) return;
-    setState(() => _unlockMessage = _unmetMessage(unmet));
-  }
-
-  Future<String?> _askPin() {
-    return showDialog<String>(
+    final pin = await showModalBottomSheet<String>(
       context: context,
-      builder: (context) => const _PinDialog(),
+      backgroundColor: BlockingColors.surface,
+      shape: _sheetShape,
+      showDragHandle: true,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => const _PinSheet(),
     );
+    if (pin == null || !mounted) return;
+    if (strict.pin!.matches(pin)) {
+      await _write(null);
+    } else {
+      setState(() => _message = 'That PIN is wrong.');
+    }
   }
 
   Future<void> _emergency() async {
@@ -252,6 +325,7 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
     final text = emergencyText(Random.secure());
     final typed = await showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (_) => _RetypeDialog(text: text),
     );
     if ((typed ?? false) && mounted) await _write(null);
@@ -265,358 +339,712 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
       );
     }
     final strict = _strict;
-    if (strict == null) return _setup();
     final now = DateTime.now();
-    if (strictModeEnded(strict, now)) return _ended();
-    return _active(strict, now);
-  }
-
-  Widget _setup() {
-    final needsPin = _conditions.contains(UnlockCondition.pin);
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-      children: [
-        const Text(
-          'Strict mode',
-          style: TextStyle(
-            fontSize: 30,
-            height: 1.15,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.6,
-          ),
-        ),
-        const SizedBox(height: 12),
-        const Text(
-          'Locks your blocks so they cannot be undone on a whim. Choose what '
-          'it takes to unlock, and what stays locked meanwhile.',
-          style: TextStyle(
-            fontSize: 16,
-            height: 1.45,
-            color: BlockingColors.textMuted,
-          ),
-        ),
-        const _Label('Unlock with'),
-        _Chips<UnlockCondition>(
-          values: UnlockCondition.values,
-          selected: _conditions,
-          label: _conditionLabel,
-          keyPrefix: 'strict-condition',
-          enabled: (condition) =>
-              condition != UnlockCondition.followSchedules || _hasScheduleRule,
-          onToggle: (condition, selected) => setState(() {
-            selected
-                ? _conditions.add(condition)
-                : _conditions.remove(condition);
-          }),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Text(
-            [
-              if (_conditions.length > 1) 'All of these are needed to unlock.',
-              if (!_hasScheduleRule)
-                'Following schedules needs an enabled time schedule.',
-            ].join(' '),
-            style: const TextStyle(
-              fontSize: 13,
-              color: BlockingColors.textMuted,
-            ),
-          ),
-        ),
-        if (_conditions.contains(UnlockCondition.timer)) ...[
-          const _Label('For'),
-          _Chips<Duration>(
-            values: _timerLengths,
-            selected: {_timerLength},
-            label: _lengthLabel,
-            keyPrefix: 'strict-timer',
-            onToggle: (length, _) => setState(() => _timerLength = length),
-          ),
-        ],
-        if (needsPin) ...[
-          const _Label('PIN'),
-          _PinField(
-            key: const ValueKey('strict-pin'),
-            controller: _pin,
-            onChanged: () => setState(() {}),
-          ),
-          const SizedBox(height: 10),
-          _PinField(
-            key: const ValueKey('strict-pin-confirm'),
-            controller: _pinConfirm,
-            hint: 'Confirm PIN',
-            onChanged: () => setState(() {}),
-          ),
-          if (_pin.text.isNotEmpty && !_pinValid)
-            const Padding(
-              padding: EdgeInsets.only(top: 8),
-              child: Text(
-                'Use 4 to 8 digits and enter the same PIN twice.',
-                style: TextStyle(fontSize: 13, color: BlockingColors.rising),
-              ),
-            ),
-        ],
-        const _Label('Cooldown'),
-        _Chips<Duration?>(
-          values: _cooldowns,
-          selected: {_cooldown},
-          label: (cooldown) =>
-              cooldown == null ? 'Off' : _lengthLabel(cooldown),
-          keyPrefix: 'strict-cooldown',
-          onToggle: (cooldown, _) => setState(() => _cooldown = cooldown),
-        ),
-        const Padding(
-          padding: EdgeInsets.only(top: 8),
-          child: Text(
-            'Unlocking waits this long after you ask for it.',
-            style: TextStyle(fontSize: 13, color: BlockingColors.textMuted),
-          ),
-        ),
-        const _Label('While strict'),
-        for (final lock in StrictLock.values)
-          SwitchListTile(
-            key: ValueKey('strict-lock-${lock.name}'),
-            contentPadding: EdgeInsets.zero,
-            title: Text(_lockTitle(lock)),
-            subtitle: Text(
-              lock == StrictLock.settings && _settingsForced
-                  ? 'Kept on: the clock and the device admin are changed here.'
-                  : _lockDetail(lock),
-              style: const TextStyle(color: BlockingColors.textMuted),
-            ),
-            value: _effectiveLocks.contains(lock),
-            activeTrackColor: BlockingColors.accent,
-            activeThumbColor: BlockingColors.onAccent,
-            onChanged: lock == StrictLock.settings && _settingsForced
-                ? null
-                : (value) => setState(() {
-                    value ? _locks.add(lock) : _locks.remove(lock);
-                  }),
-          ),
-        const Padding(
-          padding: EdgeInsets.only(top: 8),
-          child: Text(
-            'Nothing here stops Safe mode or a computer with developer tools.',
-            style: TextStyle(fontSize: 13, color: BlockingColors.textMuted),
-          ),
-        ),
-        if (_activationMessage case final message?)
-          Padding(
-            padding: const EdgeInsets.only(top: 20),
-            child: Text(
-              message,
-              key: const ValueKey('strict-activation-message'),
-              style: const TextStyle(color: BlockingColors.rising),
-            ),
-          ),
-        const SizedBox(height: 24),
-        FilledButton(
-          key: const ValueKey('strict-activate'),
-          onPressed: _canActivate ? () => unawaited(_activate()) : null,
-          style: _primaryStyle,
-          child: const Text('Activate'),
-        ),
-      ],
+    if (strict == null) return _flow();
+    if (strictModeEnded(strict, now)) {
+      return _Entrance(key: const ValueKey('ended'), child: _ended(strict));
+    }
+    return _Entrance(
+      key: const ValueKey('active'),
+      child: _active(strict, now),
     );
   }
 
-  Widget _active(StrictMode strict, DateTime now) {
-    final remaining = cooldownRemaining(strict, now);
-    final waiting = remaining != null && strict.unlockRequestedAt != null;
-    final ready = remaining == null || remaining == Duration.zero;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-      children: [
-        const Icon(Icons.shield, size: 56, color: BlockingColors.accent),
-        const SizedBox(height: 16),
-        const Text(
-          'Strict mode is on',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 30,
-            height: 1.15,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.6,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          _statusLine(strict, now),
-          key: const ValueKey('strict-status'),
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 16,
-            height: 1.45,
-            color: BlockingColors.textMuted,
-          ),
-        ),
-        const _Label('Locked'),
-        for (final lock in StrictLock.values)
-          if (strict.locks.contains(lock))
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.check_circle,
-                    size: 20,
-                    color: BlockingColors.accent,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text(_lockTitle(lock))),
-                ],
-              ),
-            ),
-        const SizedBox(height: 32),
-        if (_unlockMessage case final message?)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              message,
-              key: const ValueKey('strict-unlock-message'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: BlockingColors.rising),
-            ),
-          ),
-        if (waiting && !ready)
-          Text(
-            'Unlock opens in ${_clock(remaining)}.',
-            key: const ValueKey('strict-cooldown'),
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: BlockingColors.textMuted),
-          ),
-        if (waiting && !ready)
-          TextButton(
-            key: const ValueKey('strict-cancel-unlock'),
-            onPressed: () => unawaited(_write(strict.withUnlockRequest(null))),
-            style: TextButton.styleFrom(
-              foregroundColor: BlockingColors.textMuted,
-            ),
-            child: const Text('Cancel request'),
-          )
-        else
-          OutlinedButton(
-            key: const ValueKey('strict-unlock'),
-            onPressed: () => unawaited(
-              ready ? _unlock(strict) : _write(strict.withUnlockRequest(now)),
-            ),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white,
-              side: const BorderSide(color: BlockingColors.outline),
-              shape: const StadiumBorder(),
-              padding: const EdgeInsets.symmetric(vertical: 16),
-            ),
-            child: Text(ready ? 'Unlock' : 'Request unlock'),
-          ),
-        TextButton(
-          key: const ValueKey('strict-emergency'),
-          onPressed: () => unawaited(_emergency()),
-          style: TextButton.styleFrom(
-            foregroundColor: BlockingColors.textMuted,
-          ),
-          child: const Text('Emergency unlock'),
-        ),
-      ],
-    );
-  }
-
-  Widget _ended() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+  Widget _flow() {
+    final steps = _steps;
+    return PopScope(
+      canPop: _stepIndex == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _back();
+      },
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Spacer(),
-          const Icon(
-            Icons.shield_outlined,
-            size: 56,
-            color: BlockingColors.textMuted,
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Strict mode has ended',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 30,
-              height: 1.15,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.6,
+          _Progress(step: _stepIndex, total: steps.length),
+          Expanded(
+            child: PageView.builder(
+              controller: _pages,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: steps.length,
+              itemBuilder: (_, index) => _page(steps[index]),
             ),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Your blocks are back to normal.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 16,
-              height: 1.45,
-              color: BlockingColors.textMuted,
-            ),
-          ),
-          const Spacer(),
-          FilledButton(
-            key: const ValueKey('strict-done'),
-            onPressed: () => unawaited(_write(null)),
-            style: _primaryStyle,
-            child: const Text('Done'),
           ),
         ],
       ),
     );
   }
 
-  String _statusLine(StrictMode strict, DateTime now) {
-    final parts = <String>[
-      if (strict.until case final until? when now.isBefore(until))
-        'Ends in ${_remainingLabel(until.difference(now))}',
-      if (strict.conditions.contains(UnlockCondition.followSchedules))
-        'Guards screens while your schedules run',
-      if (strict.conditions.contains(UnlockCondition.pin) &&
-          strict.conditions.contains(UnlockCondition.charger))
-        'Unlock with your PIN while charging'
-      else if (strict.conditions.contains(UnlockCondition.pin))
-        'Unlock with your PIN'
-      else if (strict.conditions.contains(UnlockCondition.charger))
-        'Unlock while charging',
-      if (strict.cooldown case final cooldown?)
-        'Unlocking waits ${_lengthLabel(cooldown)}',
+  Widget _page(_Step step) {
+    final now = DateTime.now();
+    final l10n = MaterialLocalizations.of(context);
+    return switch (step) {
+      _Step.end => _StepPage(
+        title: 'How will it end?',
+        body: 'Pick one. Your blocks stay locked until then.',
+        footer: _PlanLine(_planSentence(now, l10n)),
+        primaryLabel: 'Continue',
+        onPrimary: _next,
+        children: [
+          _Stagger(
+            index: 0,
+            child: _OptionCard(
+              key: const ValueKey('strict-end-timer'),
+              icon: Icons.timer_outlined,
+              title: 'Timer',
+              detail:
+                  'Ends on its own when the time is up. Nothing ends it '
+                  'earlier.',
+              selected: _timed,
+              onTap: () => setState(() => _timed = true),
+            ),
+          ),
+          _Stagger(
+            index: 1,
+            child: _OptionCard(
+              key: const ValueKey('strict-end-pin'),
+              icon: Icons.key_outlined,
+              title: 'PIN',
+              detail:
+                  'Ends when the PIN is entered. Best kept by someone you '
+                  'trust.',
+              selected: !_timed,
+              onTap: () => setState(() => _timed = false),
+            ),
+          ),
+        ],
+      ),
+      _Step.timer => _StepPage(
+        title: 'For how long?',
+        body: 'From five minutes to 99 days. Strict mode ends by itself.',
+        footer: _PlanLine(
+          'Ends ${_untilLabel(now.add(_timerLength), now, l10n)}.',
+        ),
+        primaryLabel: 'Continue',
+        onPrimary: _next,
+        onBack: _back,
+        children: [
+          _BigLength(_lengthLabel(_timerLength)),
+          const SizedBox(height: 16),
+          _DurationWheels(
+            keyPrefix: 'strict-timer',
+            value: _timerLength,
+            minimum: _minTimer,
+            onChanged: (length) => setState(() => _timerLength = length),
+          ),
+          const SizedBox(height: 16),
+          _QuickPicks(
+            keyPrefix: 'strict-quick',
+            options: _quickTimers,
+            value: _timerLength,
+            onChanged: (length) => setState(() => _timerLength = length),
+          ),
+        ],
+      ),
+      _Step.pin => _StepPage(
+        title: _pinFirst == null ? 'Choose a PIN' : 'Confirm your PIN',
+        body: _pinFirst == null
+            ? 'Four to eight digits. Ask someone you trust to pick it and '
+                  'keep it from you.'
+            : 'Type the same PIN once more.',
+        primaryLabel: 'Continue',
+        onPrimary: _pinReady ? _next : null,
+        onBack: _back,
+        children: [
+          const SizedBox(height: 8),
+          _PinDots(
+            digits: _pinEntry,
+            mismatch: _pinMismatch,
+            message: _pinMismatch
+                ? 'Those did not match. Start again.'
+                : _pin != null && _pinFirst == null && _pinEntry.isEmpty
+                ? 'PIN set. Type a new one to change it.'
+                : null,
+          ),
+          const SizedBox(height: 8),
+          _Keypad(
+            digits: _pinEntry,
+            onChanged: (digits) => setState(() {
+              _pinEntry = digits;
+              _pinMismatch = false;
+            }),
+          ),
+        ],
+      ),
+      _Step.cooldown => _StepPage(
+        title: 'Wait before unlocking?',
+        body:
+            'After you ask to unlock, the PIN only counts once this has '
+            'passed. You can cancel the request while it waits.',
+        footer: _PlanLine(
+          _cooldown == Duration.zero
+              ? 'No wait. The PIN unlocks at once.'
+              : 'Unlocking waits ${_lengthLabel(_cooldown)} after you ask.',
+        ),
+        primaryLabel: 'Continue',
+        onPrimary: _next,
+        onBack: _back,
+        children: [
+          _BigLength(_cooldownLabel(_cooldown)),
+          const SizedBox(height: 16),
+          _DurationWheels(
+            keyPrefix: 'strict-cooldown',
+            value: _cooldown,
+            minimum: Duration.zero,
+            onChanged: (length) => setState(() => _cooldown = length),
+          ),
+          const SizedBox(height: 16),
+          _QuickPicks(
+            keyPrefix: 'strict-cool',
+            options: _quickCooldowns,
+            value: _cooldown,
+            label: _cooldownLabel,
+            onChanged: (length) => setState(() => _cooldown = length),
+          ),
+        ],
+      ),
+      _Step.locks => _StepPage(
+        title: 'What stays locked?',
+        body:
+            'Your blocks are locked either way. These shut the side doors, '
+            'and can be added later but never removed.',
+        primaryLabel: 'Continue',
+        onPrimary: _next,
+        onBack: _back,
+        children: [
+          _Dial(
+            size: 150,
+            fraction: _effectiveLocks.length / StrictLock.values.length,
+            color: BlockingColors.accent,
+            child: _GlyphCenter(
+              label: '${_effectiveLocks.length} of ${StrictLock.values.length}',
+            ),
+          ),
+          const SizedBox(height: 20),
+          for (final (index, lock) in StrictLock.values.indexed)
+            _Stagger(
+              index: index,
+              child: lock == StrictLock.settings && _settingsForced
+                  ? _lockCard(
+                      lock,
+                      on: true,
+                      detail:
+                          'Kept on by ${_join(_forcedSettingsCauses)}. The '
+                          'clock and device admin live in Settings.',
+                      onChanged: null,
+                    )
+                  : _lockCard(
+                      lock,
+                      on: _effectiveLocks.contains(lock),
+                      onChanged: (on) => setState(() {
+                        on ? _locks.add(lock) : _locks.remove(lock);
+                      }),
+                    ),
+            ),
+        ],
+      ),
+      _Step.review => _StepPage(
+        title: _timed
+            ? 'Lock for ${_lengthLabel(_timerLength)}?'
+            : 'Lock until the PIN?',
+        body: 'Read it once more. Undoing it is meant to be hard.',
+        primaryKey: const ValueKey('strict-activate'),
+        primaryLabel: _timed
+            ? 'Lock for ${_lengthLabel(_timerLength)}'
+            : 'Lock now',
+        onPrimary: () => unawaited(_activate()),
+        onBack: _back,
+        children: [
+          _Dial(
+            size: 150,
+            fraction: 1,
+            color: BlockingColors.accent,
+            child: _GlyphCenter(
+              label: _timed ? _lengthLabel(_timerLength) : 'Until the PIN',
+            ),
+          ),
+          const SizedBox(height: 12),
+          _PlanLine(_planSentence(now, l10n)),
+          const SizedBox(height: 20),
+          _Card(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Column(
+              children: [
+                for (final fact in _reviewFacts(now, l10n)) _FactRow(fact),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          const Note(message: _caveat),
+          if (_message case final message?) ...[
+            const SizedBox(height: 14),
+            Note(
+              icon: Icons.error_outline,
+              iconColor: BlockingColors.rising,
+              message: message,
+            ),
+          ],
+        ],
+      ),
+    };
+  }
+
+  Widget _lockCard(
+    StrictLock lock, {
+    required bool on,
+    required ValueChanged<bool>? onChanged,
+    String? detail,
+  }) {
+    return _ToggleCard(
+      switchKey: ValueKey('strict-lock-${lock.name}'),
+      icon: _lockIcon(lock),
+      title: _lockTitle(lock),
+      detail: detail ?? _lockDetail(lock),
+      value: on,
+      onChanged: onChanged,
+    );
+  }
+
+  List<_Fact> _reviewFacts(DateTime now, MaterialLocalizations l10n) {
+    final locks = _effectiveLocks;
+    final cooldown = _cooldownOrNull;
+    return [
+      (
+        icon: Icons.event,
+        eyebrow: 'Ends',
+        value: _timed
+            ? '${_untilLabel(now.add(_timerLength), now, l10n)} '
+                  '(${_lengthLabel(_timerLength)}). Nothing ends it earlier.'
+            : cooldown == null
+            ? 'When the PIN is entered.'
+            : 'When the PIN is entered, ${_lengthLabel(cooldown)} after you '
+                  'ask to unlock.',
+      ),
+      (
+        icon: Icons.lock_outline,
+        eyebrow: 'Locked',
+        value: [
+          'Your blocks',
+          for (final lock in StrictLock.values)
+            if (locks.contains(lock))
+              lock == StrictLock.settings && _settingsForced
+                  ? '${_lockTitle(lock)} (kept on)'
+                  : _lockTitle(lock),
+        ].join(' · '),
+      ),
+      if (locks.contains(StrictLock.uninstall))
+        (
+          icon: Icons.admin_panel_settings_outlined,
+          eyebrow: 'Device admin',
+          value:
+              'Android will ask to make SerenSync a device admin. Allow it, '
+              'or the lock does not start.',
+        ),
+      (
+        icon: Icons.health_and_safety_outlined,
+        eyebrow: 'Emergency exit',
+        value: _emergencyUsed
+            ? 'Means retyping $emergencyTextLength random characters.'
+            : 'Works once, after three questions. Afterwards it means '
+                  'retyping $emergencyTextLength random characters.',
+      ),
     ];
-    return parts.join('. ');
+  }
+
+  /// The commitment in words; the review page shows the same text.
+  String _planSentence(DateTime now, MaterialLocalizations l10n) {
+    if (_timed) {
+      return 'Locks for ${_lengthLabel(_timerLength)}, until '
+          '${_untilLabel(now.add(_timerLength), now, l10n)}. Ends on its own.';
+    }
+    final cooldown = _cooldownOrNull;
+    return cooldown == null
+        ? 'Locks until the PIN is entered.'
+        : 'Locks until the PIN is entered, ${_lengthLabel(cooldown)} after '
+              'you ask to unlock.';
+  }
+
+  Widget _active(StrictMode strict, DateTime now) {
+    final l10n = MaterialLocalizations.of(context);
+    final remaining = cooldownRemaining(strict, now);
+    final pending =
+        strict.unlockRequestedAt != null &&
+        remaining != null &&
+        remaining > Duration.zero;
+    final ready = remaining == null || remaining == Duration.zero;
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _Eyebrow('Strict mode is on'),
+                _activeDial(strict, now, l10n, pending: pending, ready: ready),
+                const SizedBox(height: 24),
+                const Text(
+                  'Your blocks are locked. They can be tightened, never '
+                  'loosened.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.4,
+                    color: BlockingColors.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const _Eyebrow('To unlock', centred: false),
+                const SizedBox(height: 10),
+                _Card(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Column(
+                    children: [
+                      for (final (index, row) in _unlockRows(
+                        strict,
+                        now,
+                        l10n,
+                        pending: pending,
+                        ready: ready,
+                      ).indexed) ...[
+                        if (index > 0) const _RowDivider(),
+                        _StatusRow(row),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const _Eyebrow('Side doors', centred: false),
+                const SizedBox(height: 4),
+                const Text(
+                  'Locks can be added while strict mode runs, never removed.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: BlockingColors.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                for (final lock in StrictLock.values)
+                  if (strict.locks.contains(lock))
+                    _lockCard(lock, on: true, onChanged: null)
+                  else
+                    _lockCard(
+                      lock,
+                      on: false,
+                      onChanged: (_) => unawaited(_addLock(strict, lock)),
+                    ),
+                const SizedBox(height: 14),
+                const Divider(color: Colors.white12),
+                const SizedBox(height: 12),
+                Text(
+                  _emergencyUsed
+                      ? 'For real emergencies. You will retype '
+                            '$emergencyTextLength random characters.'
+                      : 'For real emergencies. Three questions, once; afterwards '
+                            'you retype $emergencyTextLength random characters.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    height: 1.4,
+                    color: BlockingColors.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                TextButton(
+                  key: const ValueKey('strict-emergency'),
+                  onPressed: () => unawaited(_emergency()),
+                  style: TextButton.styleFrom(
+                    foregroundColor: BlockingColors.textMuted,
+                    minimumSize: const Size(0, 48),
+                    textStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  child: const Text('Emergency unlock'),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  _caveat,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: BlockingColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (!strict.timed || _message != null)
+          _StickyBar(
+            children: [
+              if (_message case final message?)
+                Note(
+                  icon: Icons.error_outline,
+                  iconColor: BlockingColors.rising,
+                  message: message,
+                ),
+              if (!strict.timed) ...[
+                if (!pending && !ready)
+                  Text(
+                    'Starts a ${_lengthLabel(strict.cooldown!)} wait, then '
+                    'asks for your PIN.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: BlockingColors.textMuted,
+                    ),
+                  ),
+                if (pending)
+                  OutlinedButton(
+                    key: const ValueKey('strict-cancel-unlock'),
+                    onPressed: () =>
+                        unawaited(_write(strict.withUnlockRequest(null))),
+                    style: _secondaryStyle,
+                    child: const Text('Cancel request'),
+                  )
+                else
+                  OutlinedButton(
+                    key: const ValueKey('strict-unlock'),
+                    onPressed: () => unawaited(
+                      ready
+                          ? _unlock(strict)
+                          : _write(strict.withUnlockRequest(now)),
+                    ),
+                    style: _secondaryStyle,
+                    child: Text(ready ? 'Unlock' : 'Request unlock'),
+                  ),
+                if (pending)
+                  const Text(
+                    'Cancelling keeps strict mode on and forgets the request.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: BlockingColors.textMuted,
+                    ),
+                  ),
+              ],
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _activeDial(
+    StrictMode strict,
+    DateTime now,
+    MaterialLocalizations l10n, {
+    required bool pending,
+    required bool ready,
+  }) {
+    if (pending) {
+      final remaining = cooldownRemaining(strict, now)!;
+      final opensAt = strict.unlockRequestedAt!.add(strict.cooldown!);
+      return _Dial(
+        size: 240,
+        fraction: remaining.inMilliseconds / strict.cooldown!.inMilliseconds,
+        color: BlockingColors.textMuted,
+        semanticsLabel:
+            'Unlock opens in ${_clock(remaining)}, at ${ruleTime(_minuteOfDay(opensAt))}',
+        child: _RingCenter(
+          big: ruleTime(_minuteOfDay(opensAt)),
+          small: 'Unlock opens in ${_clock(remaining)}',
+          footnote: _sameDay(opensAt, now)
+              ? null
+              : _untilLabel(opensAt, now, l10n),
+        ),
+      );
+    }
+    if (strict.timed) {
+      final until = strict.until!;
+      final remaining = until.difference(now);
+      return _Dial(
+        size: 240,
+        fraction:
+            remaining.inMilliseconds /
+            until.difference(strict.activatedAt).inMilliseconds,
+        color: BlockingColors.accent,
+        semanticsLabel:
+            'Ends in ${_remainingLabel(remaining)}, at ${ruleTime(_minuteOfDay(until))}',
+        child: _RingCenter(
+          big: _remainingLabel(remaining),
+          small: 'until ${_untilLabel(until, now, l10n)}',
+        ),
+      );
+    }
+    return _Dial(
+      size: 240,
+      fraction: 1,
+      color: BlockingColors.accent,
+      semanticsLabel: 'Locked',
+      child: _GlyphCenter(
+        label: ready && strict.unlockRequestedAt != null
+            ? 'Unlock is open'
+            : 'Locked',
+        size: const Size(40, 46),
+        labelSize: 15,
+      ),
+    );
+  }
+
+  List<_StatusRowData> _unlockRows(
+    StrictMode strict,
+    DateTime now,
+    MaterialLocalizations l10n, {
+    required bool pending,
+    required bool ready,
+  }) {
+    final remaining = cooldownRemaining(strict, now);
+    if (strict.timed) {
+      final until = strict.until!;
+      return [
+        (
+          icon: Icons.timer_outlined,
+          title: 'Ends in ${_remainingLabel(until.difference(now))}',
+          subtitle:
+              '${_untilLabel(until, now, l10n)}. Nothing ends it earlier.',
+          trailing: Icons.schedule,
+          done: false,
+        ),
+      ];
+    }
+    return [
+      (
+        icon: Icons.key_outlined,
+        title: 'Enter your PIN',
+        subtitle: ready
+            ? 'Tap Unlock below.'
+            : pending
+            ? 'Once the cooldown is over.'
+            : 'Tap Request unlock below, then wait.',
+        trailing: Icons.radio_button_unchecked,
+        done: false,
+      ),
+      if (remaining != null)
+        strict.unlockRequestedAt == null
+            ? (
+                icon: Icons.hourglass_empty,
+                title: 'Unlocking waits ${_lengthLabel(strict.cooldown!)}',
+                subtitle: 'You can cancel the request while it waits.',
+                trailing: Icons.hourglass_empty,
+                done: false,
+              )
+            : remaining > Duration.zero
+            ? (
+                icon: Icons.hourglass_top,
+                title: 'Cooldown running',
+                subtitle: 'Cancel below to forget the request.',
+                trailing: Icons.schedule,
+                done: false,
+              )
+            : (
+                icon: Icons.check_circle_outline,
+                title: 'Cooldown served',
+                subtitle: 'Unlock is open.',
+                trailing: Icons.check_circle,
+                done: true,
+              ),
+    ];
+  }
+
+  Widget _ended(StrictMode strict) {
+    final held = strict.until!.difference(strict.activatedAt);
+    return Column(
+      children: [
+        Expanded(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _Dial(
+                    size: 200,
+                    fraction: 1,
+                    color: BlockingColors.accent,
+                    semanticsLabel: 'Strict mode has ended',
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: 1),
+                      duration: _duration(context, 400),
+                      curve: Easing.emphasizedDecelerate,
+                      builder: (_, open, _) => _LockGlyph(
+                        open: open,
+                        color: BlockingColors.accent,
+                        size: const Size(44, 50),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Strict mode has ended',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'You held it for ${_lengthLabel(held)}.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: BlockingColors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Your blocks are back to normal. Anything you tightened stays '
+                    'tightened.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 15,
+                      height: 1.45,
+                      color: BlockingColors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Too easy? Pick a longer timer or a PIN next time.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: BlockingColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        _StickyBar(
+          children: [
+            FilledButton(
+              key: const ValueKey('strict-done'),
+              onPressed: () => unawaited(_write(null)),
+              style: _primaryStyle,
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }
 
-String _remainingLabel(Duration remaining) {
-  final minutes = Duration(minutes: (remaining.inSeconds / 60).ceil());
-  if (minutes.inDays >= 1) {
-    return '${minutes.inDays}d ${minutes.inHours.remainder(24)}h';
-  }
-  return ruleDuration(minutes);
-}
+typedef _Fact = ({IconData icon, String eyebrow, String value});
 
-String _unmetMessage(Set<UnlockCondition> unmet) {
-  return [
-    for (final condition in unmet)
-      switch (condition) {
-        UnlockCondition.pin => 'That PIN is wrong.',
-        UnlockCondition.charger => 'Plug in a charger first.',
-        UnlockCondition.timer => 'The timer has not ended yet.',
-        UnlockCondition.followSchedules => 'Wait until your schedules end.',
-      },
-  ].join(' ');
-}
-
-String _conditionLabel(UnlockCondition condition) {
-  return switch (condition) {
-    UnlockCondition.pin => 'PIN',
-    UnlockCondition.charger => 'Charger',
-    UnlockCondition.timer => 'Timer',
-    UnlockCondition.followSchedules => 'Follow schedules',
-  };
-}
+typedef _StatusRowData = ({
+  IconData icon,
+  String title,
+  String subtitle,
+  IconData trailing,
+  bool done,
+});
 
 String _lockTitle(StrictLock lock) {
   return switch (lock) {
-    StrictLock.rules => 'Lock blocks',
     StrictLock.settings => 'Block device settings',
     StrictLock.uninstall => 'Block uninstalling',
     StrictLock.recents => 'Block recent apps',
@@ -624,29 +1052,50 @@ String _lockTitle(StrictLock lock) {
   };
 }
 
+IconData _lockIcon(StrictLock lock) {
+  return switch (lock) {
+    StrictLock.settings => Icons.settings_outlined,
+    StrictLock.uninstall => Icons.admin_panel_settings_outlined,
+    StrictLock.recents => Icons.view_carousel_outlined,
+    StrictLock.newApps => Icons.download_outlined,
+  };
+}
+
 String _lockDetail(StrictLock lock) {
   return switch (lock) {
-    StrictLock.rules =>
-      'Blocks can be added to or tightened, but not paused, deleted, or '
-          'loosened.',
     StrictLock.settings => 'The Settings app shows the block screen.',
     StrictLock.uninstall =>
-      'SerenSync becomes a device admin, so Android refuses to uninstall it.',
-    StrictLock.recents =>
-      'The recent apps screen shows the block screen while SerenSync is the '
-          'home app.',
+      'Android refuses to remove SerenSync. Needs SerenSync as a device '
+          'admin.',
+    StrictLock.recents => 'The recent apps screen shows the block screen.',
     StrictLock.newApps => 'Apps installed from now on are blocked.',
   };
 }
 
+/// "3 hours", "1 day 4 h", "2 h 30 min", "45 min".
 String _lengthLabel(Duration length) {
-  if (length.inDays >= 1) {
-    return length.inDays == 1 ? '1 day' : '${length.inDays} days';
+  final days = length.inDays;
+  final hours = length.inHours.remainder(24);
+  final minutes = length.inMinutes.remainder(60);
+  final wholeHours = days == 0 && minutes == 0;
+  final parts = [
+    if (days > 0) days == 1 ? '1 day' : '$days days',
+    if (hours > 0)
+      wholeHours ? (hours == 1 ? '1 hour' : '$hours hours') : '$hours h',
+    if (minutes > 0) '$minutes min',
+  ];
+  return parts.isEmpty ? '0 min' : parts.join(' ');
+}
+
+String _cooldownLabel(Duration length) =>
+    length == Duration.zero ? 'None' : _lengthLabel(length);
+
+String _remainingLabel(Duration remaining) {
+  final minutes = Duration(minutes: (remaining.inSeconds / 60).ceil());
+  if (minutes.inDays >= 1) {
+    return '${minutes.inDays}d ${minutes.inHours.remainder(24)}h';
   }
-  if (length.inHours >= 1) {
-    return length.inHours == 1 ? '1 hour' : '${length.inHours} hours';
-  }
-  return '${length.inMinutes} min';
+  return ruleDuration(minutes);
 }
 
 String _clock(Duration duration) {
@@ -659,6 +1108,34 @@ String _clock(Duration duration) {
       : '$minutes:$rest';
 }
 
+int _minuteOfDay(DateTime time) => time.hour * 60 + time.minute;
+
+bool _sameDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
+String _untilLabel(DateTime until, DateTime now, MaterialLocalizations l10n) {
+  final time = ruleTime(_minuteOfDay(until));
+  if (_sameDay(until, now)) return 'today at $time';
+  if (_sameDay(until, now.add(const Duration(days: 1)))) {
+    return 'tomorrow at $time';
+  }
+  return '${l10n.formatMediumDate(until)} at $time';
+}
+
+String _join(List<String> parts) {
+  return switch (parts.length) {
+    1 => parts.single,
+    2 => '${parts.first} and ${parts.last}',
+    _ => '${parts.take(parts.length - 1).join(', ')}, and ${parts.last}',
+  };
+}
+
+Duration _duration(BuildContext context, int milliseconds) {
+  return MediaQuery.disableAnimationsOf(context)
+      ? Duration.zero
+      : Duration(milliseconds: milliseconds);
+}
+
 final _primaryStyle = FilledButton.styleFrom(
   backgroundColor: BlockingColors.accent,
   foregroundColor: BlockingColors.onAccent,
@@ -669,17 +1146,1117 @@ final _primaryStyle = FilledButton.styleFrom(
   textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
 );
 
-class _Label extends StatelessWidget {
-  const _Label(this.text);
+final _secondaryStyle = OutlinedButton.styleFrom(
+  foregroundColor: Colors.white,
+  side: const BorderSide(color: BlockingColors.outline),
+  shape: const StadiumBorder(),
+  padding: const EdgeInsets.symmetric(vertical: 16),
+  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+);
+
+const _sheetShape = RoundedRectangleBorder(
+  borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+  side: BorderSide(color: BlockingColors.outline),
+);
+
+class _Progress extends StatelessWidget {
+  const _Progress({required this.step, required this.total});
+
+  final int step;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 4),
+      child: Row(
+        children: [
+          for (var index = 0; index < total; index++) ...[
+            Expanded(
+              child: AnimatedContainer(
+                duration: _duration(context, 250),
+                height: 3,
+                decoration: BoxDecoration(
+                  color: index <= step
+                      ? BlockingColors.accent
+                      : BlockingColors.outline,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            if (index < total - 1) const SizedBox(width: 4),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Everything scrolls except the actions pinned underneath, so no step can
+/// outgrow the screen.
+class _StepPage extends StatelessWidget {
+  const _StepPage({
+    required this.title,
+    required this.body,
+    required this.children,
+    required this.primaryLabel,
+    required this.onPrimary,
+    this.primaryKey = const ValueKey('strict-next'),
+    this.onBack,
+    this.footer,
+  });
+
+  final String title;
+  final String body;
+  final List<Widget> children;
+  final String primaryLabel;
+  final VoidCallback? onPrimary;
+  final Key primaryKey;
+  final VoidCallback? onBack;
+  final Widget? footer;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 26,
+                      height: 1.15,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.6,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    body,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.4,
+                      color: BlockingColors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ...children,
+                ],
+              ),
+            ),
+          ),
+          if (footer case final footer?) ...[
+            const SizedBox(height: 10),
+            footer,
+          ],
+          const SizedBox(height: 10),
+          FilledButton(
+            key: primaryKey,
+            onPressed: onPrimary,
+            style: _primaryStyle,
+            child: Text(primaryLabel),
+          ),
+          if (onBack != null)
+            TextButton(
+              key: const ValueKey('strict-back'),
+              onPressed: onBack,
+              style: TextButton.styleFrom(
+                foregroundColor: BlockingColors.textMuted,
+                minimumSize: const Size.fromHeight(40),
+              ),
+              child: const Text('Back'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlanLine extends StatelessWidget {
+  const _PlanLine(this.text);
 
   final String text;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 28, 0, 10),
+    return AnimatedSwitcher(
+      duration: _duration(context, 150),
       child: Text(
         text,
+        key: ValueKey(text),
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontSize: 13,
+          height: 1.4,
+          color: BlockingColors.textMuted,
+        ),
+      ),
+    );
+  }
+}
+
+/// The chosen length, large, swapping as the wheels move.
+class _BigLength extends StatelessWidget {
+  const _BigLength(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      child: AnimatedSwitcher(
+        duration: _duration(context, 150),
+        child: _FitText(
+          text,
+          key: ValueKey(text),
+          style: const TextStyle(
+            fontSize: 34,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -1,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A single line that shrinks rather than wraps or overflows.
+class _FitText extends StatelessWidget {
+  const _FitText(this.text, {super.key, required this.style});
+
+  final String text;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(text, maxLines: 1, style: style),
+    );
+  }
+}
+
+/// Lifts a list item into place shortly after the ones above it.
+class _Stagger extends StatelessWidget {
+  const _Stagger({required this.index, required this.child});
+
+  final int index;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final delay = (index * 0.12).clamp(0.0, 0.6);
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: _duration(context, 500),
+      curve: Interval(delay, 1, curve: Curves.easeOutCubic),
+      child: child,
+      builder: (_, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, 12 * (1 - value)),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+/// Fades and lifts a freshly shown state into place.
+class _Entrance extends StatelessWidget {
+  const _Entrance({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: _duration(context, 210),
+      curve: Easing.emphasizedDecelerate,
+      child: child,
+      builder: (_, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, 8 * (1 - value)),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class _OptionCard extends StatelessWidget {
+  const _OptionCard({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.detail,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String detail;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tint = selected ? BlockingColors.accent : BlockingColors.textMuted;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: BlockingColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(
+            color: selected ? BlockingColors.accent : BlockingColors.outline,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                _Badge(icon: icon, tint: tint),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: _CardText(title: title, detail: detail),
+                ),
+                const SizedBox(width: 12),
+                AnimatedContainer(
+                  duration: _duration(context, 160),
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? BlockingColors.accent
+                        : Colors.transparent,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: selected
+                          ? BlockingColors.accent
+                          : BlockingColors.outline,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: selected
+                      ? const Icon(
+                          Icons.check,
+                          size: 16,
+                          color: BlockingColors.onAccent,
+                        )
+                      : null,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Without [onChanged] the switch shows as locked in place.
+class _ToggleCard extends StatelessWidget {
+  const _ToggleCard({
+    required this.switchKey,
+    required this.icon,
+    required this.title,
+    required this.detail,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final Key switchKey;
+  final IconData icon;
+  final String title;
+  final String detail;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final locked = onChanged == null;
+    final tint = value ? BlockingColors.accent : BlockingColors.textMuted;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: BlockingColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(
+            color: value ? BlockingColors.accent : BlockingColors.outline,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onChanged == null ? null : () => onChanged!(!value),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+            child: Row(
+              children: [
+                _Badge(icon: locked ? Icons.lock : icon, tint: tint),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: _CardText(title: title, detail: detail),
+                ),
+                Switch(
+                  key: switchKey,
+                  value: value,
+                  onChanged: onChanged,
+                  activeTrackColor: BlockingColors.accent,
+                  activeThumbColor: BlockingColors.onAccent,
+                  inactiveTrackColor: BlockingColors.surfaceRaised,
+                  inactiveThumbColor: Colors.white70,
+                  trackColor: locked
+                      ? WidgetStatePropertyAll(
+                          BlockingColors.accent.withValues(alpha: 0.45),
+                        )
+                      : null,
+                  thumbColor: locked
+                      ? const WidgetStatePropertyAll(BlockingColors.onAccent)
+                      : null,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CardText extends StatelessWidget {
+  const _CardText({required this.title, required this.detail});
+
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          detail,
+          style: const TextStyle(
+            fontSize: 13,
+            height: 1.35,
+            color: BlockingColors.textMuted,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  const _Badge({required this.icon, required this.tint});
+
+  final IconData icon;
+  final Color tint;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: _duration(context, 160),
+      width: 42,
+      height: 42,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: tint.withValues(alpha: 0.12),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(icon, size: 20, color: tint),
+    );
+  }
+}
+
+class _QuickPicks extends StatelessWidget {
+  const _QuickPicks({
+    required this.keyPrefix,
+    required this.options,
+    required this.value,
+    required this.onChanged,
+    this.label = _lengthLabel,
+  });
+
+  final String keyPrefix;
+  final List<Duration> options;
+  final Duration value;
+  final ValueChanged<Duration> onChanged;
+  final String Function(Duration) label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final option in options)
+          ActionChip(
+            key: ValueKey('$keyPrefix-${option.inMinutes}m'),
+            label: Text(label(option)),
+            onPressed: () => onChanged(option),
+            backgroundColor: option == value
+                ? BlockingColors.accent
+                : BlockingColors.surfaceRaised,
+            labelStyle: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: option == value ? BlockingColors.onAccent : Colors.white,
+            ),
+            side: BorderSide(
+              color: option == value
+                  ? BlockingColors.accent
+                  : BlockingColors.outline,
+            ),
+            shape: const StadiumBorder(),
+          ),
+      ],
+    );
+  }
+}
+
+/// Days, hours and minutes wheels, up to 99 days.
+class _DurationWheels extends StatefulWidget {
+  const _DurationWheels({
+    required this.keyPrefix,
+    required this.value,
+    required this.minimum,
+    required this.onChanged,
+  });
+
+  final String keyPrefix;
+  final Duration value;
+  final Duration minimum;
+  final ValueChanged<Duration> onChanged;
+
+  @override
+  State<_DurationWheels> createState() => _DurationWheelsState();
+}
+
+class _DurationWheelsState extends State<_DurationWheels> {
+  late final FixedExtentScrollController _days = FixedExtentScrollController(
+    initialItem: widget.value.inDays,
+  );
+  late final FixedExtentScrollController _hours = FixedExtentScrollController(
+    initialItem: widget.value.inHours.remainder(24),
+  );
+  late final FixedExtentScrollController _minutes = FixedExtentScrollController(
+    initialItem: widget.value.inMinutes.remainder(60),
+  );
+  late int _day = widget.value.inDays;
+  late int _hour = widget.value.inHours.remainder(24);
+  late int _minute = widget.value.inMinutes.remainder(60);
+  bool _following = false;
+
+  @override
+  void didUpdateWidget(_DurationWheels old) {
+    super.didUpdateWidget(old);
+    if (old.value != widget.value) _follow(widget.value);
+  }
+
+  // A quick pick or a clamp moved the value; the wheels catch up. Jumping
+  // fires the wheels' change callbacks synchronously, mid-build, so they are
+  // muted while it happens.
+  void _follow(Duration value) {
+    _day = value.inDays;
+    _hour = value.inHours.remainder(24);
+    _minute = value.inMinutes.remainder(60);
+    _following = true;
+    _jump(_days, _day);
+    _jump(_hours, _hour);
+    _jump(_minutes, _minute);
+    _following = false;
+  }
+
+  void _jump(FixedExtentScrollController controller, int item) {
+    if (controller.hasClients && controller.selectedItem != item) {
+      controller.jumpToItem(item);
+    }
+  }
+
+  void _emit() {
+    if (_following) return;
+    final value = Duration(days: _day, hours: _hour, minutes: _minute);
+    widget.onChanged(value < widget.minimum ? widget.minimum : value);
+  }
+
+  @override
+  void dispose() {
+    _days.dispose();
+    _hours.dispose();
+    _minutes.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      decoration: BoxDecoration(
+        color: BlockingColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: BlockingColors.outline),
+      ),
+      child: Row(
+        children: [
+          _Wheel(
+            key: ValueKey('${widget.keyPrefix}-days'),
+            controller: _days,
+            count: _maxLength.inDays + 1,
+            unit: 'days',
+            onChanged: (index) {
+              _day = index;
+              _emit();
+            },
+          ),
+          _Wheel(
+            key: ValueKey('${widget.keyPrefix}-hours'),
+            controller: _hours,
+            count: 24,
+            unit: 'hours',
+            onChanged: (index) {
+              _hour = index;
+              _emit();
+            },
+          ),
+          _Wheel(
+            key: ValueKey('${widget.keyPrefix}-minutes'),
+            controller: _minutes,
+            count: 60,
+            unit: 'min',
+            onChanged: (index) {
+              _minute = index;
+              _emit();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Wheel extends StatelessWidget {
+  const _Wheel({
+    super.key,
+    required this.controller,
+    required this.count,
+    required this.unit,
+    required this.onChanged,
+  });
+
+  final FixedExtentScrollController controller;
+  final int count;
+  final String unit;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    // Read outside the picker, which would otherwise impose Cupertino's type.
+    final style = DefaultTextStyle.of(context).style.copyWith(
+      fontSize: 26,
+      fontWeight: FontWeight.w600,
+      color: Colors.white,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            unit,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: BlockingColors.textMuted,
+            ),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 156,
+            child: CupertinoPicker(
+              scrollController: controller,
+              itemExtent: 44,
+              squeeze: 1.2,
+              useMagnifier: true,
+              magnification: 1.1,
+              backgroundColor: Colors.transparent,
+              selectionOverlay: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: BlockingColors.accent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onSelectedItemChanged: onChanged,
+              children: [
+                for (var index = 0; index < count; index++)
+                  Center(
+                    child: Text(index.toString().padLeft(2, '0'), style: style),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The padlock closes as the first four digits arrive.
+class _PinDots extends StatelessWidget {
+  const _PinDots({required this.digits, this.message, this.mismatch = false});
+
+  final String digits;
+  final String? message;
+  final bool mismatch;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 1, end: 1 - min(digits.length, 4) / 4),
+          duration: _duration(context, 300),
+          curve: Curves.easeOutCubic,
+          builder: (_, open, _) => _LockGlyph(
+            open: open,
+            color: BlockingColors.accent,
+            size: const Size(40, 46),
+          ),
+        ),
+        const SizedBox(height: 24),
+        _Shake(
+          trigger: mismatch ? 1 : 0,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var index = 0; index < max(4, digits.length); index++)
+                AnimatedContainer(
+                  duration: _duration(context, 120),
+                  margin: const EdgeInsets.symmetric(horizontal: 7),
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: index < digits.length
+                        ? BlockingColors.accent
+                        : Colors.transparent,
+                    border: Border.all(
+                      color: index < digits.length
+                          ? BlockingColors.accent
+                          : BlockingColors.outline,
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 36,
+          child: Center(
+            child: Text(
+              message ?? '',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: mismatch
+                    ? BlockingColors.rising
+                    : BlockingColors.textMuted,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Appends up to eight digits to [digits] and trims one on backspace.
+class _Keypad extends StatelessWidget {
+  const _Keypad({required this.digits, required this.onChanged});
+
+  final String digits;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget key(String label, {VoidCallback? onTap, IconData? icon}) {
+      return Expanded(
+        child: Padding(
+          padding: const EdgeInsets.all(5),
+          child: SizedBox(
+            height: 54,
+            child: Material(
+              color: onTap == null
+                  ? Colors.transparent
+                  : BlockingColors.surfaceRaised,
+              shape: const StadiumBorder(),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                key: onTap == null
+                    ? null
+                    : ValueKey('strict-key-${icon == null ? label : 'back'}'),
+                onTap: onTap,
+                child: Center(
+                  child: icon == null
+                      ? Text(
+                          label,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        )
+                      : Icon(icon, size: 22, color: BlockingColors.textMuted),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    void digit(String value) {
+      if (digits.length < 8) onChanged(digits + value);
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final row in const [
+          ['1', '2', '3'],
+          ['4', '5', '6'],
+          ['7', '8', '9'],
+        ])
+          Row(children: [for (final d in row) key(d, onTap: () => digit(d))]),
+        Row(
+          children: [
+            key(''),
+            key('0', onTap: () => digit('0')),
+            key(
+              '',
+              icon: Icons.backspace_outlined,
+              onTap: digits.isEmpty
+                  ? null
+                  : () => onChanged(digits.substring(0, digits.length - 1)),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Nudges its child sideways each time [trigger] changes.
+class _Shake extends StatelessWidget {
+  const _Shake({required this.trigger, required this.child});
+
+  final int trigger;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(trigger),
+      tween: Tween(begin: trigger == 0 ? 1 : 0, end: 1),
+      duration: _duration(context, 400),
+      child: child,
+      builder: (_, value, child) => Transform.translate(
+        offset: Offset(sin(value * pi * 4) * 10 * (1 - value), 0),
+        child: child,
+      ),
+    );
+  }
+}
+
+/// Asks for the PIN when unlocking.
+class _PinSheet extends StatefulWidget {
+  const _PinSheet();
+
+  @override
+  State<_PinSheet> createState() => _PinSheetState();
+}
+
+class _PinSheetState extends State<_PinSheet> {
+  String _digits = '';
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Enter your PIN',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 16),
+          _PinDots(digits: _digits),
+          const SizedBox(height: 8),
+          _Keypad(
+            digits: _digits,
+            onChanged: (digits) => setState(() => _digits = digits),
+          ),
+          const SizedBox(height: 12),
+          FilledButton(
+            key: const ValueKey('strict-pin-submit'),
+            onPressed: _digits.length >= 4
+                ? () => Navigator.of(context).pop(_digits)
+                : null,
+            style: _primaryStyle,
+            child: const Text('Unlock'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style: TextButton.styleFrom(
+              foregroundColor: BlockingColors.textMuted,
+              minimumSize: const Size.fromHeight(44),
+            ),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The ring every state is built around; the arc animates to its fraction.
+class _Dial extends StatelessWidget {
+  const _Dial({
+    required this.size,
+    required this.fraction,
+    required this.color,
+    required this.child,
+    this.semanticsLabel,
+  });
+
+  final double size;
+  final double fraction;
+  final Color color;
+  final Widget child;
+  final String? semanticsLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Semantics(
+        label: semanticsLabel,
+        excludeSemantics: semanticsLabel != null,
+        child: SizedBox(
+          width: size,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: fraction.clamp(0, 1)),
+            duration: _duration(context, 600),
+            curve: Curves.easeOutCubic,
+            child: child,
+            builder: (_, value, child) =>
+                TimerDial(fraction: value, color: color, child: child!),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GlyphCenter extends StatelessWidget {
+  const _GlyphCenter({
+    required this.label,
+    this.size = const Size(28, 32),
+    this.labelSize = 13,
+  });
+
+  final String label;
+  final Size size;
+  final double labelSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 36),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _LockGlyph(open: 0, color: BlockingColors.accent, size: size),
+          const SizedBox(height: 6),
+          _FitText(
+            label,
+            style: TextStyle(
+              fontSize: labelSize,
+              fontWeight: FontWeight.w600,
+              color: BlockingColors.textMuted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RingCenter extends StatelessWidget {
+  const _RingCenter({required this.big, required this.small, this.footnote});
+
+  final String big;
+  final String small;
+  final String? footnote;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 40),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _FitText(
+            big,
+            style: const TextStyle(
+              fontSize: 40,
+              height: 1,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -1.2,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+          ),
+          const SizedBox(height: 4),
+          _FitText(
+            small,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: BlockingColors.textMuted,
+            ),
+          ),
+          if (footnote case final footnote?)
+            _FitText(
+              footnote,
+              style: const TextStyle(
+                fontSize: 12,
+                color: BlockingColors.textMuted,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A padlock in the onboarding illustration style; [open] lifts the shackle.
+class _LockGlyph extends StatelessWidget {
+  const _LockGlyph({
+    required this.open,
+    required this.color,
+    required this.size,
+  });
+
+  final double open;
+  final Color color;
+  final Size size;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: size,
+      painter: _LockGlyphPainter(open: open, color: color),
+    );
+  }
+}
+
+class _LockGlyphPainter extends CustomPainter {
+  const _LockGlyphPainter({required this.open, required this.color});
+
+  final double open;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final body = RRect.fromRectAndRadius(
+      Rect.fromLTRB(0, h * 0.42, w, h),
+      Radius.circular(w * 0.2),
+    );
+    canvas.drawRRect(body, Paint()..color = BlockingColors.surfaceRaised);
+    canvas.drawRRect(
+      body,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..color = color,
+    );
+    final keyhole = Paint()..color = color;
+    canvas.drawCircle(Offset(w * 0.5, h * 0.66), w * 0.07, keyhole);
+    canvas.drawRect(
+      Rect.fromLTRB(w * 0.47, h * 0.66, w * 0.53, h * 0.82),
+      keyhole,
+    );
+
+    final shackle = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..color = color;
+    final radius = w * 0.3;
+    final top = h * 0.42;
+    canvas.save();
+    // Lift and swing the shackle around its right foot as the lock opens.
+    canvas.translate(w * 0.8, top);
+    canvas.rotate(-28 * pi / 180 * open);
+    canvas.translate(-w * 0.8, -top - h * 0.14 * open);
+    final path = Path()
+      ..moveTo(w * 0.2, top)
+      ..lineTo(w * 0.2, top - h * 0.02)
+      ..arcTo(
+        Rect.fromCircle(
+          center: Offset(w * 0.5, top - h * 0.02),
+          radius: radius,
+        ),
+        pi,
+        pi,
+        false,
+      )
+      ..lineTo(w * 0.8, top);
+    canvas.drawPath(path, shackle);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_LockGlyphPainter old) =>
+      old.open != open || old.color != color;
+}
+
+class _Eyebrow extends StatelessWidget {
+  const _Eyebrow(this.text, {this.centred = true});
+
+  final String text;
+  final bool centred;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: centred ? 12 : 0),
+      child: Text(
+        text,
+        textAlign: centred ? TextAlign.center : TextAlign.start,
         style: const TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w700,
@@ -690,150 +2267,157 @@ class _Label extends StatelessWidget {
   }
 }
 
-class _Chips<T> extends StatelessWidget {
-  const _Chips({
-    required this.values,
-    required this.selected,
-    required this.label,
-    required this.keyPrefix,
-    this.enabled,
-    required this.onToggle,
-  });
-
-  final List<T> values;
-  final Set<T> selected;
-  final String Function(T value) label;
-  final String keyPrefix;
-  final bool Function(T value)? enabled;
-  final void Function(T value, bool selected) onToggle;
+class _RowDivider extends StatelessWidget {
+  const _RowDivider();
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (final value in values)
-          FilterChip(
-            key: ValueKey('$keyPrefix-${_keyName(value)}'),
-            label: Text(label(value)),
-            selected: selected.contains(value),
-            onSelected: (enabled?.call(value) ?? true)
-                ? (isSelected) => onToggle(value, isSelected)
-                : null,
-            showCheckmark: false,
-            selectedColor: BlockingColors.accent,
-            backgroundColor: BlockingColors.surface,
-            labelStyle: TextStyle(
-              color: selected.contains(value)
-                  ? BlockingColors.onAccent
-                  : Colors.white,
-              fontWeight: FontWeight.w600,
+    return const Divider(height: 1, color: Colors.white12, indent: 48);
+  }
+}
+
+class _Card extends StatelessWidget {
+  const _Card({required this.padding, required this.child});
+
+  final EdgeInsets padding;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: BlockingColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: BlockingColors.outline),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(padding: padding, child: child),
+    );
+  }
+}
+
+class _StickyBar extends StatelessWidget {
+  const _StickyBar({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 8,
+          children: children,
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusRow extends StatelessWidget {
+  const _StatusRow(this.row);
+
+  final _StatusRowData row;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: Row(
+        children: [
+          Icon(row.icon, size: 20, color: BlockingColors.accent),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  row.title,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  row.subtitle,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: BlockingColors.textMuted,
+                  ),
+                ),
+              ],
             ),
-            side: BorderSide(
-              color: selected.contains(value)
-                  ? BlockingColors.accent
-                  : BlockingColors.outline,
-            ),
-            shape: const StadiumBorder(),
           ),
-      ],
-    );
-  }
-
-  String _keyName(T value) {
-    return switch (value) {
-      final Enum value => value.name,
-      final Duration value => '${value.inMinutes}m',
-      null => 'off',
-      _ => '$value',
-    };
-  }
-}
-
-class _PinField extends StatelessWidget {
-  const _PinField({
-    super.key,
-    required this.controller,
-    this.hint = 'PIN',
-    this.onChanged,
-  });
-
-  final TextEditingController controller;
-  final String hint;
-  final VoidCallback? onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      obscureText: true,
-      keyboardType: TextInputType.number,
-      inputFormatters: [
-        FilteringTextInputFormatter.digitsOnly,
-        LengthLimitingTextInputFormatter(8),
-      ],
-      cursorColor: BlockingColors.accent,
-      onChanged: (_) => onChanged?.call(),
-      decoration: InputDecoration(
-        hintText: hint,
-        filled: true,
-        fillColor: BlockingColors.surface,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 16,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: BlockingColors.accent),
-        ),
+          const SizedBox(width: 12),
+          Icon(
+            row.trailing,
+            size: 18,
+            color: row.done ? BlockingColors.accent : BlockingColors.textMuted,
+          ),
+        ],
       ),
     );
   }
 }
 
-class _PinDialog extends StatefulWidget {
-  const _PinDialog();
+class _FactRow extends StatelessWidget {
+  const _FactRow(this.fact);
 
-  @override
-  State<_PinDialog> createState() => _PinDialogState();
-}
-
-class _PinDialogState extends State<_PinDialog> {
-  final TextEditingController _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  final _Fact fact;
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Enter your PIN'),
-      content: _PinField(
-        key: const ValueKey('strict-pin-entry'),
-        controller: _controller,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: BlockingColors.accent.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(fact.icon, size: 18, color: BlockingColors.accent),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  fact.eyebrow,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: BlockingColors.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  fact.value,
+                  style: const TextStyle(fontSize: 14, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          key: const ValueKey('strict-pin-submit'),
-          onPressed: () => Navigator.of(context).pop(_controller.text),
-          child: const Text('Unlock'),
-        ),
-      ],
     );
   }
 }
+
+final _dialogShape = RoundedRectangleBorder(
+  borderRadius: BorderRadius.circular(20),
+  side: const BorderSide(color: BlockingColors.outline),
+);
+const _dialogTitle = TextStyle(fontSize: 20, fontWeight: FontWeight.w700);
 
 const _emergencySteps = <({String question, String proceed, String stay})>[
   (
@@ -842,9 +2426,7 @@ const _emergencySteps = <({String question, String proceed, String stay})>[
     stay: 'An urge',
   ),
   (
-    question:
-        'Could it wait until the timer ends, a charger is nearby, or the '
-        'PIN holder is around?',
+    question: 'Could it wait until the timer ends or the PIN holder is around?',
     proceed: 'It cannot wait',
     stay: 'It can wait',
   ),
@@ -856,6 +2438,51 @@ const _emergencySteps = <({String question, String proceed, String stay})>[
     stay: 'Keep strict mode',
   ),
 ];
+
+class _ConfirmLock extends StatelessWidget {
+  const _ConfirmLock(this.lock);
+
+  final StrictLock lock;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: BlockingColors.surface,
+      shape: _dialogShape,
+      title: Text(
+        'Turn on ${_lockTitle(lock).toLowerCase()}?',
+        style: _dialogTitle,
+      ),
+      content: Text(
+        '${_lockDetail(lock)}\n\nThis cannot be undone until strict mode ends.',
+        style: const TextStyle(fontSize: 15, height: 1.45),
+      ),
+      actions: [
+        TextButton(
+          key: const ValueKey('strict-lock-cancel'),
+          onPressed: () => Navigator.of(context).pop(false),
+          style: TextButton.styleFrom(
+            foregroundColor: BlockingColors.textMuted,
+          ),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('strict-lock-confirm'),
+          onPressed: () => Navigator.of(context).pop(true),
+          style: _primaryStyle.copyWith(
+            padding: const WidgetStatePropertyAll(
+              EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            textStyle: const WidgetStatePropertyAll(
+              TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+          ),
+          child: const Text('Turn on'),
+        ),
+      ],
+    );
+  }
+}
 
 class _EmergencyQuestions extends StatefulWidget {
   const _EmergencyQuestions();
@@ -871,14 +2498,59 @@ class _EmergencyQuestionsState extends State<_EmergencyQuestions> {
   Widget build(BuildContext context) {
     final step = _emergencySteps[_step];
     return AlertDialog(
-      title: Text('Emergency ${_step + 1} of ${_emergencySteps.length}'),
-      content: Text(step.question),
+      backgroundColor: BlockingColors.surface,
+      shape: _dialogShape,
+      actionsAlignment: MainAxisAlignment.spaceBetween,
+      actionsPadding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+      title: Text(
+        'Emergency ${_step + 1} of ${_emergencySteps.length}',
+        style: _dialogTitle,
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              for (var index = 0; index < _emergencySteps.length; index++)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: index <= _step
+                          ? BlockingColors.accent
+                          : Colors.transparent,
+                      border: Border.all(
+                        color: index <= _step
+                            ? BlockingColors.accent
+                            : BlockingColors.outline,
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          AnimatedSwitcher(
+            duration: _duration(context, 200),
+            child: Text(
+              step.question,
+              key: ValueKey(_step),
+              style: const TextStyle(fontSize: 16, height: 1.45),
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Take a breath. There is no rush to answer.',
+            style: TextStyle(fontSize: 13, color: BlockingColors.textMuted),
+          ),
+        ],
+      ),
       actions: [
-        TextButton(
-          key: const ValueKey('strict-emergency-stay'),
-          onPressed: () => Navigator.of(context).pop(false),
-          child: Text(step.stay),
-        ),
         TextButton(
           key: const ValueKey('strict-emergency-proceed'),
           onPressed: () {
@@ -888,7 +2560,28 @@ class _EmergencyQuestionsState extends State<_EmergencyQuestions> {
               setState(() => _step++);
             }
           },
+          style: TextButton.styleFrom(
+            foregroundColor: BlockingColors.textMuted,
+            minimumSize: const Size(0, 48),
+            textStyle: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           child: Text(step.proceed),
+        ),
+        FilledButton(
+          key: const ValueKey('strict-emergency-stay'),
+          onPressed: () => Navigator.of(context).pop(false),
+          style: _primaryStyle.copyWith(
+            padding: const WidgetStatePropertyAll(
+              EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            textStyle: const WidgetStatePropertyAll(
+              TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+          ),
+          child: Text(step.stay),
         ),
       ],
     );
@@ -913,44 +2606,123 @@ class _RetypeDialogState extends State<_RetypeDialog> {
     super.dispose();
   }
 
+  int get _matched {
+    final typed = _controller.text;
+    var index = 0;
+    while (index < typed.length &&
+        index < widget.text.length &&
+        typed[index] == widget.text[index]) {
+      index++;
+    }
+    return index;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final matches = _controller.text == widget.text;
+    final typed = _controller.text;
+    final matched = _matched;
+    final matches = typed == widget.text;
+    const mono = TextStyle(fontFamily: 'monospace', fontSize: 13);
     return AlertDialog(
-      title: const Text('Retype to unlock'),
+      backgroundColor: BlockingColors.surface,
+      shape: _dialogShape,
+      insetPadding: const EdgeInsets.all(20),
+      scrollable: true,
+      title: const Text('Retype to unlock', style: _dialogTitle),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            widget.text,
-            style: const TextStyle(
-              fontFamily: 'monospace',
+          const Text(
+            'Type the $emergencyTextLength characters below. Paste is off; '
+            'this is meant to be slow.',
+            style: TextStyle(
               fontSize: 13,
-              height: 1.5,
-              letterSpacing: 1,
+              height: 1.4,
+              color: BlockingColors.textMuted,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: BlockingColors.surfaceRaised,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text(
+              widget.text,
+              style: mono.copyWith(height: 1.6, letterSpacing: 1.2),
+            ),
+          ),
+          const SizedBox(height: 12),
           TextField(
             key: const ValueKey('strict-retype'),
             controller: _controller,
             autocorrect: false,
             enableSuggestions: false,
+            enableInteractiveSelection: false,
+            contextMenuBuilder: (_, _) => const SizedBox.shrink(),
+            keyboardType: TextInputType.visiblePassword,
             maxLines: 3,
             cursorColor: BlockingColors.accent,
+            style: mono,
             onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(hintText: 'Type it here'),
+            decoration: InputDecoration(
+              hintText: 'Type it here',
+              filled: true,
+              fillColor: BlockingColors.surfaceRaised,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: matched / widget.text.length,
+            minHeight: 3,
+            borderRadius: BorderRadius.circular(2),
+            color: BlockingColors.accent,
+            backgroundColor: BlockingColors.outline,
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  matched < typed.length
+                      ? 'Mismatch at character ${matched + 1}'
+                      : '',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: BlockingColors.rising,
+                  ),
+                ),
+              ),
+              Text(
+                '${typed.length} / ${widget.text.length}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: BlockingColors.textMuted,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
           ),
         ],
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
+          style: TextButton.styleFrom(
+            foregroundColor: BlockingColors.textMuted,
+          ),
           child: const Text('Cancel'),
         ),
         TextButton(
           key: const ValueKey('strict-retype-submit'),
           onPressed: matches ? () => Navigator.of(context).pop(true) : null,
+          style: TextButton.styleFrom(foregroundColor: BlockingColors.accent),
           child: const Text('Unlock'),
         ),
       ],

@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serensync/main_app/blocking/block_overlay.dart';
 import 'package:serensync/main_app/blocking/blocking_engine.dart';
-import 'package:serensync/main_app/blocking/browser_watcher.dart';
+import 'package:serensync/main_app/blocking/screen_watcher.dart';
 import 'package:serensync/main_app/blocking/foreground_app.dart';
 import 'package:serensync/main_app/blocking/rule.dart';
 
@@ -380,6 +380,76 @@ void main() {
       expect(overlay.ruleName, 'One launch');
     },
   );
+
+  test('a guarded package is blocked the moment its window appears', () async {
+    final foreground = FakeForegroundApp(packageName: 'com.example.other');
+    final overlay = FakeBlockOverlay();
+    final engine = BlockingEngine(foregroundApp: foreground, overlay: overlay);
+    engine.guardPackages(const <String>{'com.android.settings'});
+
+    await engine.screenChanged((package: 'com.example.other', ownAdmin: false));
+    expect(overlay.showCalls, 0);
+
+    await engine.screenChanged((
+      package: 'com.android.settings',
+      ownAdmin: false,
+    ));
+    expect(overlay.packageName, 'com.android.settings');
+    expect(overlay.ruleName, 'Strict mode');
+  });
+
+  test('a guarded screen keeps its overlay through a stale browser event and '
+      'is ignored while the screen is off', () async {
+    final foreground = FakeForegroundApp(packageName: browser);
+    final overlay = FakeBlockOverlay();
+    final engine = BlockingEngine(foregroundApp: foreground, overlay: overlay);
+    engine.guardPackages(const <String>{'com.android.settings'});
+    await engine.tick(now);
+    expect(overlay.visible, isFalse);
+
+    await engine.screenChanged((
+      package: 'com.android.settings',
+      ownAdmin: false,
+    ));
+    await engine.addressChanged(_page(browser, 'example.com'), now);
+    expect(overlay.visible, isTrue);
+    expect(overlay.ruleName, 'Strict mode');
+
+    foreground.screenInteractive = false;
+    await engine.tick(now);
+    expect(overlay.visible, isFalse);
+    await engine.screenChanged((
+      package: 'com.android.settings',
+      ownAdmin: false,
+    ));
+    expect(overlay.visible, isFalse);
+  });
+
+  test('the own device admin screen is backed out of while uninstalls are '
+      'blocked', () async {
+    var backs = 0;
+    final overlay = FakeBlockOverlay();
+    final engine = BlockingEngine(
+      foregroundApp: FakeForegroundApp(packageName: 'com.android.settings'),
+      overlay: overlay,
+      goBack: () async => backs++,
+    );
+    const admin = (package: 'com.android.settings', ownAdmin: true);
+
+    engine.guardPackages(const <String>{'com.android.settings'});
+    await engine.screenChanged(admin);
+    expect(backs, 0);
+    expect(overlay.showCalls, 1);
+
+    engine.guardPackages(const <String>{'com.android.settings'}, admin: true);
+    await engine.screenChanged(admin);
+    expect(backs, 1);
+    await engine.screenChanged((
+      package: 'com.android.settings',
+      ownAdmin: false,
+    ));
+    expect(backs, 1);
+  });
 
   test('the recents screen is guarded by its class name', () async {
     final foreground = FakeForegroundApp(packageName: 'com.example.launcher')

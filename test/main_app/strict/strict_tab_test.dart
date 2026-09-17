@@ -10,25 +10,11 @@ import 'package:serensync/main_app/strict/strict_mode_store.dart';
 import 'package:serensync/main_app/strict/strict_tab.dart';
 import 'package:serensync/main_app/strict/uninstall_guard.dart';
 
-const _allWeek = BlockRule(
-  id: 1,
-  name: 'Always',
-  packages: {'com.example.app'},
-  trigger: Schedule(
-    weekdays: {1, 2, 3, 4, 5, 6, 7},
-    startMinute: 0,
-    endMinute: 0,
-    allDay: true,
-  ),
-  enabled: true,
-);
-
 void main() {
   late FakeStrictModeStore store;
   late FakeBlockingService blockingService;
   late FakeRuleStore ruleStore;
   late FakeUninstallGuard uninstallGuard;
-  late bool charging;
   late int changes;
 
   setUp(() {
@@ -36,26 +22,34 @@ void main() {
     blockingService = FakeBlockingService();
     ruleStore = FakeRuleStore();
     uninstallGuard = FakeUninstallGuard();
-    charging = false;
     changes = 0;
   });
 
-  Future<void> pump(WidgetTester tester) async {
-    // A phone-height surface, so the whole setup list is laid out.
-    tester.view.physicalSize = const Size(800, 2200);
+  // A small phone, so anything that does not fit fails the test.
+  Future<void> pump(WidgetTester tester, {double textScale = 1}) async {
+    tester.view.physicalSize = const Size(360, 640);
     tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = textScale;
     addTearDown(tester.view.reset);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     await tester.pumpWidget(
       MaterialApp(
         theme: ThemeData.dark(),
         home: Scaffold(
+          appBar: AppBar(title: const Text('SerenSync')),
           body: StrictTab(
             ruleStore: ruleStore,
             blockingService: blockingService,
             strictModeStore: store,
             onChanged: () => changes++,
-            isCharging: () async => charging,
             uninstallGuard: uninstallGuard,
+          ),
+          bottomNavigationBar: NavigationBar(
+            selectedIndex: 0,
+            destinations: const [
+              NavigationDestination(icon: Icon(Icons.shield), label: 'Strict'),
+              NavigationDestination(icon: Icon(Icons.block), label: 'Blocks'),
+            ],
           ),
         ),
       ),
@@ -65,174 +59,294 @@ void main() {
     addTearDown(() => tester.pumpWidget(const SizedBox()));
   }
 
+  Future<void> next(WidgetTester tester) async {
+    await tester.tap(find.byKey(const ValueKey('strict-next')));
+    await tester.pumpAndSettle();
+  }
+
+  // The small screen scrolls; bring the target into view before tapping.
+  Future<void> tapVisible(WidgetTester tester, Key key) async {
+    await Scrollable.ensureVisible(
+      tester.element(find.byKey(key)),
+      alignment: 0.5,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(key));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> typePin(WidgetTester tester, String pin) async {
+    for (final digit in pin.split('')) {
+      await tapVisible(tester, ValueKey('strict-key-$digit'));
+    }
+  }
+
+  Switch lockSwitch(WidgetTester tester, StrictLock lock) =>
+      tester.widget(find.byKey(ValueKey('strict-lock-${lock.name}')));
+
+  FilledButton primary(WidgetTester tester, String key) =>
+      tester.widget(find.byKey(ValueKey(key)));
+
   StrictMode strict({
-    Set<UnlockCondition> conditions = const {UnlockCondition.pin},
-    Set<StrictLock> locks = const {StrictLock.rules},
+    Set<StrictLock> locks = const {},
     DateTime? until,
     Duration? cooldown,
     DateTime? unlockRequestedAt,
-    String? pin = '2468',
+    String pin = '2468',
   }) {
     return StrictMode(
-      conditions: conditions,
       locks: locks,
       activatedAt: DateTime.now().subtract(const Duration(hours: 1)),
       until: until,
+      pin: until == null ? PinHash.create(pin, Random(1)) : null,
       cooldown: cooldown,
       unlockRequestedAt: unlockRequestedAt,
-      pin: pin == null ? null : PinHash.create(pin, Random(1)),
     );
   }
 
-  testWidgets('activating with a timer stores the mode and syncs', (
-    tester,
-  ) async {
+  testWidgets('a timer locks the blocks and ends by itself', (tester) async {
     await pump(tester);
-    expect(find.text('Strict mode'), findsOneWidget);
+    expect(find.text('How will it end?'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('strict-timer-180m')));
-    await tester.pump();
-    SwitchListTile settings() =>
-        tester.widget(find.byKey(const ValueKey('strict-lock-settings')));
-    expect(settings().value, isTrue);
-    expect(settings().onChanged, isNull);
-    await tester.tap(find.byKey(const ValueKey('strict-activate')));
-    await tester.pump();
+    await next(tester);
+    expect(find.text('For how long?'), findsOneWidget);
+    await tapVisible(tester, const ValueKey('strict-quick-180m'));
+    expect(find.text('3 hours'), findsWidgets);
+
+    await next(tester);
+    expect(find.text('What stays locked?'), findsOneWidget);
+    expect(lockSwitch(tester, StrictLock.settings).value, isTrue);
+    expect(lockSwitch(tester, StrictLock.settings).onChanged, isNull);
+    expect(find.textContaining('Kept on by the timer'), findsOneWidget);
+
+    await next(tester);
+    expect(find.text('Lock for 3 hours?'), findsOneWidget);
+    await tapVisible(tester, const ValueKey('strict-activate'));
 
     final saved = store.strict!;
-    expect(saved.conditions, {UnlockCondition.timer});
-    expect(saved.locks, {StrictLock.rules, StrictLock.settings});
+    expect(saved.timed, isTrue);
+    expect(saved.pin, isNull);
+    expect(saved.cooldown, isNull);
+    expect(saved.locks, {StrictLock.settings});
     expect(
       saved.until!.difference(saved.activatedAt),
       const Duration(hours: 3),
     );
-    expect(saved.pin, isNull);
     expect(blockingService.syncs, 1);
     expect(changes, 1);
     expect(find.text('Strict mode is on'), findsOneWidget);
     expect(find.text('Ends in 3h'), findsOneWidget);
-    expect(find.text('Block device settings'), findsOneWidget);
+    expect(find.byKey(const ValueKey('strict-unlock')), findsNothing);
+  });
+
+  testWidgets('the wheels take any length up to 99 days', (tester) async {
+    await pump(tester);
+    await next(tester);
+
+    // Two notches down on the hours wheel: 1 hour becomes 3 hours.
+    await tester.drag(
+      find.byKey(const ValueKey('strict-timer-hours')),
+      const Offset(0, -88),
+    );
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byKey(const ValueKey('strict-timer-minutes')),
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('3 h 5 min'), findsOneWidget);
+
+    await tester.drag(
+      find.byKey(const ValueKey('strict-timer-days')),
+      const Offset(0, -44.0 * 99),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('99 days 3 h 5 min'), findsOneWidget);
+    await next(tester);
+    await next(tester);
+    await tapVisible(tester, const ValueKey('strict-activate'));
+
+    final saved = store.strict!;
+    expect(
+      saved.until!.difference(saved.activatedAt),
+      const Duration(days: 99, hours: 3, minutes: 5),
+    );
+  });
+
+  testWidgets('a pin must be confirmed, then a cooldown can be set', (
+    tester,
+  ) async {
+    await pump(tester);
+    await tapVisible(tester, const ValueKey('strict-end-pin'));
+    expect(find.text('Locks until the PIN is entered.'), findsOneWidget);
+    await next(tester);
+    expect(find.text('Choose a PIN'), findsOneWidget);
+    expect(primary(tester, 'strict-next').onPressed, isNull);
+
+    await typePin(tester, '123');
+    expect(primary(tester, 'strict-next').onPressed, isNull);
+    await typePin(tester, '4');
+    await next(tester);
+    expect(find.text('Confirm your PIN'), findsOneWidget);
+    await typePin(tester, '1235');
+    await next(tester);
+    expect(find.text('Choose a PIN'), findsOneWidget);
+    expect(find.text('Those did not match. Start again.'), findsOneWidget);
+
+    await typePin(tester, '1234');
+    await next(tester);
+    await typePin(tester, '1234');
+    await next(tester);
+    expect(find.text('Wait before unlocking?'), findsOneWidget);
+    expect(find.text('No wait. The PIN unlocks at once.'), findsOneWidget);
+    await tapVisible(tester, const ValueKey('strict-cool-60m'));
+    expect(find.text('Unlocking waits 1 hour after you ask.'), findsOneWidget);
+
+    await next(tester);
+    expect(find.textContaining('Kept on by the cooldown'), findsOneWidget);
+    await next(tester);
+    expect(find.text('Lock until the PIN?'), findsOneWidget);
+    await tapVisible(tester, const ValueKey('strict-activate'));
+
+    final saved = store.strict!;
+    expect(saved.timed, isFalse);
+    expect(saved.pin!.matches('1234'), isTrue);
+    expect(saved.cooldown, const Duration(hours: 1));
+    expect(saved.locks, {StrictLock.settings});
+    expect(find.text('Request unlock'), findsOneWidget);
+  });
+
+  testWidgets('going back keeps the choices', (tester) async {
+    await pump(tester);
+    await next(tester);
+    await tapVisible(tester, const ValueKey('strict-quick-480m'));
+    await next(tester);
+    await tapVisible(tester, const ValueKey('strict-lock-recents'));
+    await next(tester);
+    expect(find.text('Lock for 8 hours?'), findsOneWidget);
+
+    await tapVisible(tester, const ValueKey('strict-back'));
+    expect(lockSwitch(tester, StrictLock.recents).value, isTrue);
+    await tapVisible(tester, const ValueKey('strict-back'));
+    expect(find.text('8 hours'), findsWidgets);
+    await tapVisible(tester, const ValueKey('strict-back'));
+    expect(find.text('How will it end?'), findsOneWidget);
   });
 
   testWidgets('blocking uninstalls needs the device admin and Settings lock', (
     tester,
   ) async {
     await pump(tester);
-    SwitchListTile lock(StrictLock lock) =>
-        tester.widget(find.byKey(ValueKey('strict-lock-${lock.name}')));
+    await tapVisible(tester, const ValueKey('strict-end-pin'));
+    await next(tester);
+    await typePin(tester, '1234');
+    await next(tester);
+    await typePin(tester, '1234');
+    await next(tester);
+    await next(tester);
+    expect(lockSwitch(tester, StrictLock.settings).value, isFalse);
+    expect(lockSwitch(tester, StrictLock.settings).onChanged, isNotNull);
 
-    await tester.tap(find.byKey(const ValueKey('strict-condition-timer')));
-    await tester.tap(find.byKey(const ValueKey('strict-condition-charger')));
-    await tester.pump();
-    expect(lock(StrictLock.settings).value, isFalse);
-    expect(lock(StrictLock.settings).onChanged, isNotNull);
+    await tapVisible(tester, const ValueKey('strict-lock-uninstall'));
+    expect(lockSwitch(tester, StrictLock.uninstall).value, isTrue);
+    expect(lockSwitch(tester, StrictLock.settings).value, isTrue);
+    expect(lockSwitch(tester, StrictLock.settings).onChanged, isNull);
 
-    await tester.tap(find.byKey(const ValueKey('strict-lock-uninstall')));
-    await tester.pump();
-    expect(lock(StrictLock.uninstall).value, isTrue);
-    expect(lock(StrictLock.settings).value, isTrue);
-    expect(lock(StrictLock.settings).onChanged, isNull);
+    await tapVisible(tester, const ValueKey('strict-lock-uninstall'));
+    expect(lockSwitch(tester, StrictLock.settings).value, isFalse);
 
-    await tester.tap(find.byKey(const ValueKey('strict-lock-uninstall')));
-    await tester.pump();
-    expect(lock(StrictLock.settings).value, isFalse);
-
-    await tester.tap(find.byKey(const ValueKey('strict-lock-uninstall')));
-    await tester.pump();
+    await tapVisible(tester, const ValueKey('strict-lock-uninstall'));
+    await next(tester);
     uninstallGuard.grant = false;
-    await tester.tap(find.byKey(const ValueKey('strict-activate')));
-    await tester.pump();
+    await tapVisible(tester, const ValueKey('strict-activate'));
     expect(uninstallGuard.activations, 1);
     expect(store.strict, isNull);
     expect(
-      find.byKey(const ValueKey('strict-activation-message')),
+      find.textContaining('needs SerenSync as a device admin'),
       findsOneWidget,
     );
 
     uninstallGuard.grant = true;
-    await tester.tap(find.byKey(const ValueKey('strict-activate')));
-    await tester.pump();
+    await tapVisible(tester, const ValueKey('strict-activate'));
     expect(uninstallGuard.activations, 2);
-    expect(store.strict!.locks, {
-      StrictLock.rules,
-      StrictLock.settings,
-      StrictLock.uninstall,
-    });
-    expect(find.text('Block uninstalling'), findsOneWidget);
+    expect(store.strict!.locks, {StrictLock.settings, StrictLock.uninstall});
     await tester.pumpWidget(const SizedBox());
 
-    store.strict = strict(
-      conditions: {UnlockCondition.charger},
-      locks: {StrictLock.rules, StrictLock.settings, StrictLock.uninstall},
-      pin: null,
-    );
-    charging = true;
+    store.strict = strict(locks: {StrictLock.settings, StrictLock.uninstall});
     uninstallGuard.active = true;
     await pump(tester);
     await tester.tap(find.byKey(const ValueKey('strict-unlock')));
-    await tester.pump();
+    await tester.pumpAndSettle();
+    await typePin(tester, '2468');
+    await tester.tap(find.byKey(const ValueKey('strict-pin-submit')));
+    await tester.pumpAndSettle();
 
     expect(store.strict, isNull);
     expect(uninstallGuard.deactivations, 1);
   });
 
-  testWidgets('a pin must be confirmed before activating', (tester) async {
+  testWidgets('locks can be added while strict mode runs, never removed', (
+    tester,
+  ) async {
+    store.strict = strict(
+      until: DateTime.now().add(const Duration(hours: 2)),
+      locks: {StrictLock.settings},
+    );
     await pump(tester);
-    FilledButton activate() =>
-        tester.widget(find.byKey(const ValueKey('strict-activate')));
+    expect(lockSwitch(tester, StrictLock.settings).onChanged, isNull);
+    expect(lockSwitch(tester, StrictLock.recents).onChanged, isNotNull);
 
-    await tester.tap(find.byKey(const ValueKey('strict-condition-pin')));
-    await tester.pump();
-    expect(activate().onPressed, isNull);
-
-    await tester.enterText(find.byKey(const ValueKey('strict-pin')), '1234');
-    await tester.pump();
-    expect(activate().onPressed, isNull);
+    await tapVisible(tester, const ValueKey('strict-lock-recents'));
+    expect(find.text('Turn on block recent apps?'), findsOneWidget);
     expect(
-      find.text('Use 4 to 8 digits and enter the same PIN twice.'),
+      find.textContaining('cannot be undone until strict mode ends'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('strict-lock-cancel')));
+    await tester.pumpAndSettle();
+    expect(store.strict!.locks, {StrictLock.settings});
+    expect(lockSwitch(tester, StrictLock.recents).onChanged, isNotNull);
+
+    await tapVisible(tester, const ValueKey('strict-lock-recents'));
+    await tester.tap(find.byKey(const ValueKey('strict-lock-confirm')));
+    await tester.pumpAndSettle();
+    expect(store.strict!.locks, {StrictLock.settings, StrictLock.recents});
+    expect(lockSwitch(tester, StrictLock.recents).onChanged, isNull);
+    expect(blockingService.syncs, 1);
+    expect(changes, 1);
+
+    uninstallGuard.grant = false;
+    await tapVisible(tester, const ValueKey('strict-lock-uninstall'));
+    await tester.tap(find.byKey(const ValueKey('strict-lock-confirm')));
+    await tester.pumpAndSettle();
+    expect(store.strict!.locks, {StrictLock.settings, StrictLock.recents});
+    expect(
+      find.textContaining('needs SerenSync as a device admin'),
       findsOneWidget,
     );
 
-    await tester.enterText(
-      find.byKey(const ValueKey('strict-pin-confirm')),
-      '1234',
-    );
-    await tester.pump();
-    expect(activate().onPressed, isNotNull);
-    await tester.tap(find.byKey(const ValueKey('strict-activate')));
-    await tester.pump();
-
-    final saved = store.strict!;
-    expect(saved.conditions, {UnlockCondition.timer, UnlockCondition.pin});
-    expect(saved.pin!.matches('1234'), isTrue);
-    expect(find.textContaining('Unlock with your PIN'), findsOneWidget);
+    uninstallGuard.grant = true;
+    await tapVisible(tester, const ValueKey('strict-lock-uninstall'));
+    await tester.tap(find.byKey(const ValueKey('strict-lock-confirm')));
+    await tester.pumpAndSettle();
+    expect(store.strict!.locks, {
+      StrictLock.settings,
+      StrictLock.recents,
+      StrictLock.uninstall,
+    });
   });
 
-  testWidgets('unlocking checks every condition', (tester) async {
-    store.strict = strict(
-      conditions: {UnlockCondition.pin, UnlockCondition.charger},
-    );
+  testWidgets('unlocking needs the right pin', (tester) async {
+    store.strict = strict(locks: {StrictLock.recents});
     await pump(tester);
-    expect(find.text('Unlock with your PIN while charging'), findsOneWidget);
+    expect(find.text('Enter your PIN'), findsOneWidget);
+    expect(find.text('Tap Unlock below.'), findsOneWidget);
+    expect(lockSwitch(tester, StrictLock.recents).onChanged, isNull);
+    expect(find.textContaining('Kept on by'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('strict-unlock')));
     await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('strict-pin-entry')),
-      '2468',
-    );
-    await tester.tap(find.byKey(const ValueKey('strict-pin-submit')));
-    await tester.pumpAndSettle();
-    expect(find.text('Plug in a charger first.'), findsOneWidget);
-    expect(store.strict, isNotNull);
-
-    charging = true;
-    await tester.tap(find.byKey(const ValueKey('strict-unlock')));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('strict-pin-entry')),
-      '0000',
-    );
+    await typePin(tester, '0000');
     await tester.tap(find.byKey(const ValueKey('strict-pin-submit')));
     await tester.pumpAndSettle();
     expect(find.text('That PIN is wrong.'), findsOneWidget);
@@ -240,33 +354,27 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('strict-unlock')));
     await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('strict-pin-entry')),
-      '2468',
-    );
+    await typePin(tester, '2468');
     await tester.tap(find.byKey(const ValueKey('strict-pin-submit')));
     await tester.pumpAndSettle();
 
     expect(store.strict, isNull);
     expect(blockingService.syncs, 1);
     expect(changes, 1);
-    expect(find.text('Strict mode'), findsOneWidget);
+    expect(find.text('How will it end?'), findsOneWidget);
   });
 
   testWidgets('a cooldown gates the unlock', (tester) async {
-    charging = true;
-    store.strict = strict(
-      conditions: {UnlockCondition.charger},
-      cooldown: const Duration(minutes: 10),
-      pin: null,
-    );
+    store.strict = strict(cooldown: const Duration(minutes: 10));
     await pump(tester);
     expect(find.text('Request unlock'), findsOneWidget);
+    expect(find.text('Tap Request unlock below, then wait.'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('strict-unlock')));
     await tester.pump();
     expect(store.strict!.unlockRequestedAt, isNotNull);
     expect(find.textContaining('Unlock opens in'), findsOneWidget);
+    expect(find.text('Once the cooldown is over.'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('strict-cancel-unlock')));
     await tester.pump();
@@ -275,24 +383,17 @@ void main() {
     await tester.pumpWidget(const SizedBox());
 
     store.strict = strict(
-      conditions: {UnlockCondition.charger},
       cooldown: const Duration(minutes: 10),
       unlockRequestedAt: DateTime.now().subtract(const Duration(minutes: 11)),
-      pin: null,
     );
     await pump(tester);
     expect(find.text('Unlock'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('strict-unlock')));
-    await tester.pump();
-
-    expect(store.strict, isNull);
+    expect(find.text('Unlock is open'), findsOneWidget);
   });
 
-  testWidgets('a timer-only mode ends by itself', (tester) async {
+  testWidgets('a timer ends by itself', (tester) async {
     store.strict = strict(
-      conditions: {UnlockCondition.timer},
       until: DateTime.now().subtract(const Duration(minutes: 1)),
-      pin: null,
     );
     await pump(tester);
 
@@ -301,56 +402,7 @@ void main() {
     await tester.pump();
 
     expect(store.strict, isNull);
-    expect(find.text('Strict mode'), findsOneWidget);
-  });
-
-  testWidgets('following schedules unlocks only between schedules', (
-    tester,
-  ) async {
-    ruleStore.rules = const [_allWeek];
-    store.strict = strict(
-      conditions: {UnlockCondition.followSchedules},
-      pin: null,
-    );
-    await pump(tester);
-    expect(find.text('Strict mode is on'), findsOneWidget);
-    expect(
-      find.text('Guards screens while your schedules run'),
-      findsOneWidget,
-    );
-    await tester.tap(find.byKey(const ValueKey('strict-unlock')));
-    await tester.pump();
-    expect(find.text('Wait until your schedules end.'), findsOneWidget);
-    expect(store.strict, isNotNull);
-    await tester.pumpWidget(const SizedBox());
-
-    ruleStore.rules = const [];
-    await pump(tester);
-    expect(find.text('Strict mode is on'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('strict-unlock')));
-    await tester.pump();
-
-    expect(store.strict, isNull);
-  });
-
-  testWidgets('following schedules needs an enabled time schedule', (
-    tester,
-  ) async {
-    await pump(tester);
-    FilterChip chip() => tester.widget(
-      find.byKey(const ValueKey('strict-condition-followSchedules')),
-    );
-    expect(chip().onSelected, isNull);
-    expect(
-      find.textContaining('needs an enabled time schedule'),
-      findsOneWidget,
-    );
-    await tester.pumpWidget(const SizedBox());
-
-    ruleStore.rules = const [_allWeek];
-    await pump(tester);
-
-    expect(chip().onSelected, isNotNull);
+    expect(find.text('How will it end?'), findsOneWidget);
   });
 
   testWidgets('the emergency unlock is easy once, then needs retyping', (
@@ -359,15 +411,13 @@ void main() {
     store.strict = strict();
     await pump(tester);
 
-    await tester.tap(find.byKey(const ValueKey('strict-emergency')));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, const ValueKey('strict-emergency'));
     expect(find.text('Emergency 1 of 3'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('strict-emergency-stay')));
     await tester.pumpAndSettle();
     expect(store.strict, isNotNull);
 
-    await tester.tap(find.byKey(const ValueKey('strict-emergency')));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, const ValueKey('strict-emergency'));
     for (var step = 0; step < 3; step++) {
       await tester.tap(find.byKey(const ValueKey('strict-emergency-proceed')));
       await tester.pumpAndSettle();
@@ -378,8 +428,7 @@ void main() {
 
     store.strict = strict();
     await pump(tester);
-    await tester.tap(find.byKey(const ValueKey('strict-emergency')));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, const ValueKey('strict-emergency'));
     expect(find.text('Retype to unlock'), findsOneWidget);
     TextButton submit() =>
         tester.widget(find.byKey(const ValueKey('strict-retype-submit')));
@@ -388,11 +437,12 @@ void main() {
         .widget<Text>(
           find.byWidgetPredicate(
             (widget) =>
-                widget is Text && widget.style?.fontFamily == 'monospace',
+                widget is Text &&
+                widget.style?.fontFamily == 'monospace' &&
+                widget.data?.length == emergencyTextLength,
           ),
         )
         .data!;
-    expect(shown, hasLength(120));
 
     await tester.enterText(find.byKey(const ValueKey('strict-retype')), shown);
     await tester.pump();
@@ -401,6 +451,45 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(store.strict, isNull);
+  });
+
+  testWidgets('every screen fits a small phone with large text', (
+    tester,
+  ) async {
+    await pump(tester, textScale: 1.3);
+    await tapVisible(tester, const ValueKey('strict-end-pin'));
+    await next(tester);
+    await typePin(tester, '1234');
+    await next(tester);
+    await typePin(tester, '1234');
+    await next(tester);
+    await tapVisible(tester, const ValueKey('strict-cool-1440m'));
+    await next(tester);
+    await tapVisible(tester, const ValueKey('strict-lock-uninstall'));
+    await tapVisible(tester, const ValueKey('strict-lock-recents'));
+    await tapVisible(tester, const ValueKey('strict-lock-newApps'));
+    await next(tester);
+    await tapVisible(tester, const ValueKey('strict-activate'));
+    expect(find.text('Strict mode is on'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('strict-unlock')));
+    await tester.pump();
+    expect(find.textContaining('Unlock opens in'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('strict-cancel-unlock')));
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox());
+
+    store.strict = strict(
+      until: DateTime.now().add(const Duration(days: 99)),
+      locks: StrictLock.values.toSet(),
+    );
+    await pump(tester, textScale: 1.3);
+    expect(find.text('Strict mode is on'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+
+    store.strict = strict(until: DateTime.now());
+    await pump(tester, textScale: 1.3);
+    expect(find.text('Strict mode has ended'), findsOneWidget);
   });
 }
 

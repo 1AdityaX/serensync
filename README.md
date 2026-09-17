@@ -22,10 +22,10 @@ combines a quiet home screen with rules that interrupt distracting app use.
 - Pomodoro focus sessions that lock chosen blocks for each focus round, with
   adjustable focus, break and long-break lengths, a countdown in the
   notification shade and an alert when a phase ends
-- Strict mode that locks blocks behind a PIN, a charger, a timer, your
-  schedules, or any combination, with an optional cooldown and an emergency
-  unlock; while on, blocks can only be tightened, and the Settings app, the
-  recent-apps screen, and newly installed apps can be blocked, while a
+- Strict mode that locks blocks behind a timer of up to 99 days or a PIN with
+  an optional cooldown, plus an emergency unlock; while on, blocks can only be
+  tightened, and the Settings app, the recent-apps screen, and newly installed
+  apps can be blocked, while a
   device-administrator registration keeps the app installed
 - Foreground blocking service that starts by itself while a block is enabled,
   a focus session runs, or strict mode guards apps, and restarts after boot
@@ -54,9 +54,10 @@ The main product logic lives in `lib/main_app/blocking/rule.dart`. It is pure
 Dart: plugins, Flutter APIs, and ambient clock access do not cross that
 boundary. Usage totals come from Android on demand and are never accumulated
 locally. Supported browsers and their address-bar view ids live in
-`lib/main_app/blocking/browser_watcher.dart`; the accessibility service config
+`lib/main_app/blocking/screen_watcher.dart`; the accessibility service config
 in `android/app/src/main/res/xml/accessibilityservice.xml` lists the same
-packages, and a test keeps the two in sync.
+packages plus Settings and the installers strict mode guards, and a test keeps
+the two in sync.
 
 ## Run locally
 

@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Reads the address bar of supported browsers for website and keyword blocks.
-     Keep packageNames in sync with browserAddressBars in
-     lib/main_app/blocking/browser_watcher.dart. -->
+<!-- Reads the address bar of supported browsers for website and keyword blocks,
+     and hears Settings and the installers open so strict mode can shut them at
+     once. Keep packageNames in sync with watchedPackages in
+     lib/main_app/blocking/screen_watcher.dart. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/accessibility_service_description"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewTextChanged"
@@ -9,4 +10,4 @@
     android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
     android:canRetrieveWindowContent="true"
     android:notificationTimeout="300"
-    android:packageNames="com.android.chrome,com.chrome.beta,com.chrome.dev,com.chrome.canary,com.brave.browser,com.brave.browser_beta,com.microsoft.emmx,com.kiwibrowser.browser,com.vivaldi.browser,com.ecosia.android,app.vanadium.browser,org.mozilla.firefox,org.mozilla.firefox_beta,org.mozilla.fenix,org.mozilla.focus,org.torproject.torbrowser,com.opera.browser,com.opera.browser.beta,com.opera.mini.native,com.opera.mini.native.beta,com.duckduckgo.mobile.android,com.sec.android.app.sbrowser,com.sec.android.app.sbrowser.beta,com.coloros.browser" />
+    android:packageNames="com.android.chrome,com.chrome.beta,com.chrome.dev,com.chrome.canary,com.brave.browser,com.brave.browser_beta,com.microsoft.emmx,com.kiwibrowser.browser,com.vivaldi.browser,com.ecosia.android,app.vanadium.browser,org.mozilla.firefox,org.mozilla.firefox_beta,org.mozilla.fenix,org.mozilla.focus,org.torproject.torbrowser,com.opera.browser,com.opera.browser.beta,com.opera.mini.native,com.opera.mini.native.beta,com.duckduckgo.mobile.android,com.sec.android.app.sbrowser,com.sec.android.app.sbrowser.beta,com.coloros.browser,com.android.settings,com.samsung.accessibility,com.miui.securitycenter,com.coloros.safecenter,com.oplus.safecenter,com.oplus.securitypermission,com.oplus.wirelesssettings,com.android.packageinstaller,com.google.android.packageinstaller,com.samsung.android.packageinstaller,com.miui.packageinstaller,com.miui.global.packageinstaller,com.oplus.packageinstaller" />

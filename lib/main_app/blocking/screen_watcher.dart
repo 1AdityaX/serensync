@@ -1,14 +1,27 @@
 import 'dart:async';
 
 import 'package:flutter_accessibility_service/accessibility_event.dart';
+import 'package:flutter_accessibility_service/constants.dart';
 import 'package:flutter_accessibility_service/flutter_accessibility_service.dart';
 
+import '../strict/strict_guard.dart';
 import 'rule.dart';
 
 typedef BrowserAddress = ({String browser, WebAddress? address});
 
-/// Address-bar view ids of the browsers whose pages can be blocked. Keep in
-/// sync with packageNames in android/app/src/main/res/xml/accessibilityservice.xml.
+/// A window that came to the front. [ownAdmin] marks Settings showing this
+/// app's device-admin entry, the one screen where it can be deactivated.
+typedef Screen = ({String package, bool ownAdmin});
+
+/// Every package the accessibility service listens to. Keep in sync with
+/// packageNames in android/app/src/main/res/xml/accessibilityservice.xml.
+Set<String> get watchedPackages => {
+  ...browserAddressBars.keys,
+  ...settingsPackages,
+  ...installerPackages,
+};
+
+/// Address-bar view ids of the browsers whose pages can be blocked.
 const browserAddressBars = <String, String>{
   'com.android.chrome': 'url_bar',
   'com.chrome.beta': 'url_bar',
@@ -52,6 +65,23 @@ BrowserAddress? browserAddressFrom(AccessibilityEvent event) {
   return null;
 }
 
+Screen? screenFrom(AccessibilityEvent event) {
+  final package = event.packageName;
+  if (package == null || event.eventType != EventType.typeWindowStateChanged) {
+    return null;
+  }
+  return (
+    package: package,
+    ownAdmin:
+        settingsPackages.contains(package) &&
+        <AccessibilityEvent>[event, ...?event.subNodes].any(
+          (node) =>
+              (node.nodeId?.endsWith(':id/admin_name') ?? false) &&
+              _text(node) == deviceAdminLabel,
+        ),
+  );
+}
+
 // The plugin stringifies a missing text as 'null'.
 String _text(AccessibilityEvent node) {
   return switch (node.text) {
@@ -60,8 +90,9 @@ String _text(AccessibilityEvent node) {
   };
 }
 
-class BrowserWatcher {
-  BrowserWatcher({Stream<bool>? enabled, Stream<AccessibilityEvent>? events})
+/// Accessibility events from the packages in [watchedPackages].
+class ScreenWatcher {
+  ScreenWatcher({Stream<bool>? enabled, Stream<AccessibilityEvent>? events})
     : _enabled =
           enabled ??
           FlutterAccessibilityService.onAccessibilityServiceStatusChanged,
@@ -70,14 +101,23 @@ class BrowserWatcher {
   final Stream<bool> _enabled;
   final Stream<AccessibilityEvent> _events;
 
-  /// Address changes in supported browsers. The plugin only delivers events
-  /// to subscriptions made while the accessibility service is enabled, so the
-  /// event stream is subscribed afresh each time the service is enabled.
-  Stream<BrowserAddress> addresses() {
-    late final StreamController<BrowserAddress> controller;
+  /// Address changes in supported browsers.
+  Stream<BrowserAddress> addresses() => _whileEnabled(browserAddressFrom);
+
+  /// Each window from a package in [watchedPackages] as it comes to the
+  /// front; faster than the usage-stats poll, but blind to other packages.
+  Stream<Screen> screens() => _whileEnabled(screenFrom);
+
+  // The plugin only delivers events to subscriptions made while the
+  // accessibility service is enabled, so the event stream is subscribed
+  // afresh each time the service is enabled.
+  Stream<T> _whileEnabled<T extends Object>(
+    T? Function(AccessibilityEvent event) map,
+  ) {
+    late final StreamController<T> controller;
     StreamSubscription<bool>? enabled;
     StreamSubscription<AccessibilityEvent>? events;
-    controller = StreamController<BrowserAddress>(
+    controller = StreamController<T>(
       onListen: () {
         enabled = _enabled.listen((isEnabled) {
           if (!isEnabled) {
@@ -86,8 +126,8 @@ class BrowserWatcher {
             return;
           }
           events ??= _events.listen((event) {
-            final address = browserAddressFrom(event);
-            if (address != null) controller.add(address);
+            final value = map(event);
+            if (value != null) controller.add(value);
           });
         });
       },

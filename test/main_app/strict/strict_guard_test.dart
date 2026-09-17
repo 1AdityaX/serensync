@@ -11,17 +11,14 @@ void main() {
 
   StrictMode strict(Set<StrictLock> locks) {
     return StrictMode(
-      conditions: const {UnlockCondition.pin},
       locks: locks,
       activatedAt: activatedAt,
+      until: activatedAt.add(const Duration(hours: 1)),
     );
   }
 
-  test('locking only the rules guards nothing', () {
-    expect(
-      guardedPackages(strict({StrictLock.rules}), installTimes: installTimes),
-      isEmpty,
-    );
+  test('no lock guards nothing', () {
+    expect(guardedPackages(strict({}), installTimes: installTimes), isEmpty);
   });
 
   test('each lock guards its packages', () {

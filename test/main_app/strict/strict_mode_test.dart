@@ -8,116 +8,47 @@ void main() {
   final activatedAt = DateTime(2026, 9, 16, 9);
   final now = DateTime(2026, 9, 16, 10);
 
+  final pin = PinHash.create('2468', Random(1));
+
   StrictMode strict({
-    Set<UnlockCondition> conditions = const {UnlockCondition.pin},
     DateTime? until,
     Duration? cooldown,
     DateTime? unlockRequestedAt,
   }) {
     return StrictMode(
-      conditions: conditions,
-      locks: const {StrictLock.rules},
+      locks: const {},
       activatedAt: activatedAt,
       until: until,
+      pin: until == null ? pin : null,
       cooldown: cooldown,
       unlockRequestedAt: unlockRequestedAt,
     );
   }
 
-  group('unlock conditions', () {
-    test('each condition is unmet until satisfied', () {
-      final all = strict(
-        conditions: UnlockCondition.values.toSet(),
-        until: now.add(const Duration(hours: 1)),
-      );
-
-      expect(
-        unmetConditions(
-          all,
-          now: now,
-          charging: false,
-          pinEntered: false,
-          schedulesRunning: true,
-        ),
-        UnlockCondition.values.toSet(),
-      );
-      expect(
-        unmetConditions(
-          all,
-          now: now.add(const Duration(hours: 1)),
-          charging: true,
-          pinEntered: true,
-          schedulesRunning: false,
-        ),
-        isEmpty,
-      );
-    });
-
-    test('only a timer-only mode ends by itself', () {
-      final timed = strict(
-        conditions: {UnlockCondition.timer},
-        until: now.add(const Duration(minutes: 1)),
-      );
-      final timedPin = strict(
-        conditions: {UnlockCondition.timer, UnlockCondition.pin},
-        until: activatedAt,
-      );
+  group('ending', () {
+    test('a timed mode ends by itself, a pin mode never does', () {
+      final timed = strict(until: now.add(const Duration(minutes: 1)));
 
       expect(strictModeEnded(timed, now), isFalse);
       expect(
         strictModeEnded(timed, now.add(const Duration(minutes: 1))),
         isTrue,
       );
-      expect(strictModeEnded(timedPin, now), isFalse);
       expect(strictModeEnded(strict(), now), isFalse);
     });
 
-    test('a mode following the schedules guards only while one runs', () {
-      final following = strict(conditions: {UnlockCondition.followSchedules});
-      final ended = strict(
-        conditions: {UnlockCondition.timer},
-        until: activatedAt,
-      );
-
-      expect(
-        strictGuardsApply(following, now: now, schedulesRunning: true),
-        isTrue,
-      );
-      expect(
-        strictGuardsApply(following, now: now, schedulesRunning: false),
-        isFalse,
-      );
-      expect(
-        strictGuardsApply(strict(), now: now, schedulesRunning: false),
-        isTrue,
-      );
-      expect(
-        strictGuardsApply(ended, now: now, schedulesRunning: true),
-        isFalse,
-      );
-    });
-
     test('clock-bound choices and the admin keep Settings locked', () {
-      const rules = {StrictLock.rules};
       Set<StrictLock> locks(
         Set<StrictLock> chosen, {
-        Set<UnlockCondition> conditions = const {UnlockCondition.pin},
+        bool timed = false,
         Duration? cooldown,
       }) {
-        return effectiveLocks(
-          chosen,
-          conditions: conditions,
-          cooldown: cooldown,
-        );
+        return effectiveLocks(chosen, timed: timed, cooldown: cooldown);
       }
 
-      expect(locks(rules), rules);
-      expect(locks(rules, conditions: {UnlockCondition.timer}), {
-        StrictLock.rules,
-        StrictLock.settings,
-      });
-      expect(locks(rules, cooldown: const Duration(minutes: 10)), {
-        StrictLock.rules,
+      expect(locks({}), isEmpty);
+      expect(locks({}, timed: true), {StrictLock.settings});
+      expect(locks({}, cooldown: const Duration(minutes: 10)), {
         StrictLock.settings,
       });
       expect(locks({StrictLock.uninstall}), {
@@ -150,45 +81,6 @@ void main() {
         const Duration(minutes: 10),
       );
     });
-  });
-
-  test('schedules run while an enabled schedule rule blocks', () {
-    const running = BlockRule(
-      id: 1,
-      name: 'Work',
-      packages: {'a'},
-      trigger: Schedule(
-        weekdays: {DateTime.wednesday},
-        startMinute: 9 * 60,
-        endMinute: 17 * 60,
-      ),
-      enabled: true,
-    );
-    const paused = BlockRule(
-      id: 2,
-      name: 'Paused',
-      packages: {'a'},
-      trigger: Schedule(
-        weekdays: {DateTime.wednesday},
-        startMinute: 0,
-        endMinute: 24 * 60 - 1,
-      ),
-      enabled: false,
-    );
-    const quota = BlockRule(
-      id: 3,
-      name: 'Quota',
-      packages: {'a'},
-      trigger: UsageQuota(Duration.zero),
-      enabled: true,
-    );
-
-    expect(schedulesRunning(const [running, paused, quota], now), isTrue);
-    expect(schedulesRunning(const [paused, quota], now), isFalse);
-    expect(
-      schedulesRunning(const [running], DateTime(2026, 9, 16, 18)),
-      isFalse,
-    );
   });
 
   group('tightens', () {
@@ -406,29 +298,37 @@ void main() {
 
   test('round-trips through json', () {
     final original = StrictMode(
-      conditions: {UnlockCondition.pin, UnlockCondition.timer},
-      locks: {StrictLock.rules, StrictLock.settings, StrictLock.newApps},
+      locks: {StrictLock.settings, StrictLock.newApps},
       activatedAt: activatedAt,
-      until: now,
       cooldown: const Duration(minutes: 15),
       unlockRequestedAt: now,
       pin: PinHash.create('1234', Random(3)),
     );
-    final bare = strict();
+    final timed = strict(until: now);
 
     final restored = StrictMode.fromJson(original.toJson());
-    final restoredBare = StrictMode.fromJson(bare.toJson());
+    final restoredTimed = StrictMode.fromJson(timed.toJson());
 
-    expect(restored.conditions, original.conditions);
     expect(restored.locks, original.locks);
     expect(restored.activatedAt, activatedAt);
-    expect(restored.until, now);
+    expect(restored.until, isNull);
     expect(restored.cooldown, const Duration(minutes: 15));
     expect(restored.unlockRequestedAt, now);
     expect(restored.pin!.matches('1234'), isTrue);
-    expect(restoredBare.until, isNull);
-    expect(restoredBare.cooldown, isNull);
-    expect(restoredBare.pin, isNull);
+    expect(restoredTimed.until, now);
+    expect(restoredTimed.cooldown, isNull);
+    expect(restoredTimed.pin, isNull);
+  });
+
+  test('records from before timer and pin were exclusive are dropped', () {
+    final timed = strict(until: now).toJson();
+    final both = {...timed, 'pin': PinHash.create('1234', Random(3)).toJson()};
+    final neither = {...timed, 'until': null};
+
+    expect(strictModeFromJson(timed)!.until, now);
+    expect(strictModeFromJson(strict().toJson())!.pin, isNotNull);
+    expect(strictModeFromJson(both), isNull);
+    expect(strictModeFromJson(neither), isNull);
   });
 
   test('emergency text is long and typeable', () {

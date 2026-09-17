@@ -5,44 +5,54 @@ import 'package:crypto/crypto.dart';
 
 import '../blocking/rule.dart';
 
-/// What the user must satisfy to unlock. Every chosen condition must hold.
-enum UnlockCondition { pin, charger, timer, followSchedules }
+/// Side doors strict mode can shut. The blocks themselves are always locked.
+enum StrictLock { settings, uninstall, recents, newApps }
 
-enum StrictLock { rules, settings, uninstall, recents, newApps }
-
+/// Ends on its own at [until], or when the [pin] is entered; never both.
 class StrictMode {
   const StrictMode({
-    required this.conditions,
     required this.locks,
     required this.activatedAt,
     this.until,
+    this.pin,
     this.cooldown,
     this.unlockRequestedAt,
-    this.pin,
-  });
+  }) : assert((until == null) != (pin == null));
 
-  final Set<UnlockCondition> conditions;
   final Set<StrictLock> locks;
   final DateTime activatedAt;
   final DateTime? until;
+  final PinHash? pin;
+
+  /// How long an unlock request waits before the PIN is accepted.
   final Duration? cooldown;
   final DateTime? unlockRequestedAt;
-  final PinHash? pin;
+
+  bool get timed => until != null;
 
   StrictMode withUnlockRequest(DateTime? requestedAt) {
     return StrictMode(
-      conditions: conditions,
       locks: locks,
       activatedAt: activatedAt,
       until: until,
+      pin: pin,
       cooldown: cooldown,
       unlockRequestedAt: requestedAt,
+    );
+  }
+
+  StrictMode withLocks(Set<StrictLock> locks) {
+    return StrictMode(
+      locks: locks,
+      activatedAt: activatedAt,
+      until: until,
       pin: pin,
+      cooldown: cooldown,
+      unlockRequestedAt: unlockRequestedAt,
     );
   }
 
   Map<String, Object?> toJson() => {
-    'conditions': [for (final condition in conditions) condition.name],
     'locks': [for (final lock in locks) lock.name],
     'activatedAt': activatedAt.millisecondsSinceEpoch,
     'until': until?.millisecondsSinceEpoch,
@@ -53,10 +63,6 @@ class StrictMode {
 
   factory StrictMode.fromJson(Map<String, Object?> json) {
     return StrictMode(
-      conditions: {
-        for (final name in json['conditions'] as List<Object?>)
-          UnlockCondition.values.byName(name as String),
-      },
       locks: {
         for (final name in json['locks'] as List<Object?>)
           StrictLock.values.byName(name as String),
@@ -76,6 +82,13 @@ class StrictMode {
       },
     );
   }
+}
+
+/// Null for a record from before the timer and the PIN became exclusive, so
+/// an old install does not crash on it.
+StrictMode? strictModeFromJson(Map<String, Object?> json) {
+  if ((json['until'] == null) == (json['pin'] == null)) return null;
+  return StrictMode.fromJson(json);
 }
 
 DateTime? _time(Object? milliseconds) {
@@ -111,45 +124,9 @@ class PinHash {
   }
 }
 
-/// Conditions that still stand between the user and unlocking.
-Set<UnlockCondition> unmetConditions(
-  StrictMode strict, {
-  required DateTime now,
-  required bool charging,
-  required bool pinEntered,
-  required bool schedulesRunning,
-}) {
-  return {
-    for (final condition in strict.conditions)
-      if (switch (condition) {
-        UnlockCondition.pin => !pinEntered,
-        UnlockCondition.charger => !charging,
-        UnlockCondition.timer => now.isBefore(strict.until!),
-        UnlockCondition.followSchedules => schedulesRunning,
-      })
-        condition,
-  };
-}
-
-/// A timer-only mode ends on its own; every other mode lasts until the user
-/// unlocks and the record is removed.
+/// The blocks stay locked and the side doors stay shut until this is true.
 bool strictModeEnded(StrictMode strict, DateTime now) {
-  return strict.conditions.length == 1 &&
-      strict.conditions.contains(UnlockCondition.timer) &&
-      !now.isBefore(strict.until!);
-}
-
-/// Whether the screen guards apply. The rules lock holds for as long as the
-/// record exists; a mode that follows the schedules guards screens only while
-/// one runs.
-bool strictGuardsApply(
-  StrictMode strict, {
-  required DateTime now,
-  required bool schedulesRunning,
-}) {
-  if (strictModeEnded(strict, now)) return false;
-  return schedulesRunning ||
-      !strict.conditions.contains(UnlockCondition.followSchedules);
+  return strict.timed && !now.isBefore(strict.until!);
 }
 
 /// The timer, a cooldown, and the new-apps lock follow the phone's clock, and
@@ -157,11 +134,11 @@ bool strictGuardsApply(
 /// Settings app blocked.
 Set<StrictLock> effectiveLocks(
   Set<StrictLock> locks, {
-  required Set<UnlockCondition> conditions,
+  required bool timed,
   required Duration? cooldown,
 }) {
   final needsSettings =
-      conditions.contains(UnlockCondition.timer) ||
+      timed ||
       cooldown != null ||
       locks.contains(StrictLock.uninstall) ||
       locks.contains(StrictLock.newApps);
@@ -176,15 +153,6 @@ Duration? cooldownRemaining(StrictMode strict, DateTime now) {
   if (requestedAt == null) return cooldown;
   final remaining = cooldown - now.difference(requestedAt);
   return remaining.isNegative ? Duration.zero : remaining;
-}
-
-bool schedulesRunning(List<BlockRule> rules, DateTime now) {
-  return rules.any(
-    (rule) =>
-        rule.enabled &&
-        rule.trigger is Schedule &&
-        scheduleActive(rule.trigger as Schedule, now),
-  );
 }
 
 /// Whether [after] blocks everything [before] blocks, so the change can be

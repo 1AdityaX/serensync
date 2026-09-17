@@ -63,9 +63,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   Future<void> _refresh() async {
     final strict = await widget.strictModeStore.read();
     final rulesLocked =
-        strict != null &&
-        strict.locks.contains(StrictLock.rules) &&
-        !strictModeEnded(strict, DateTime.now());
+        strict != null && !strictModeEnded(strict, DateTime.now());
     if (mounted) setState(() => _rulesLocked = rulesLocked);
     final permissions = await widget.permissionStatus.check();
     if (mounted) setState(() => _permissions = permissions);

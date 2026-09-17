@@ -3,7 +3,9 @@ import 'dart:io';
 
 import 'package:flutter_accessibility_service/accessibility_event.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:serensync/main_app/blocking/browser_watcher.dart';
+import 'package:flutter_accessibility_service/constants.dart';
+import 'package:serensync/main_app/blocking/screen_watcher.dart';
+import 'package:serensync/main_app/strict/strict_guard.dart';
 
 const _chrome = 'com.android.chrome';
 const _chromeBar = 'com.android.chrome:id/url_bar';
@@ -72,7 +74,7 @@ void main() {
     );
   });
 
-  test('the accessibility service config lists every supported browser', () {
+  test('the accessibility service config lists every watched package', () {
     final config = File(
       'android/app/src/main/res/xml/accessibilityservice.xml',
     ).readAsStringSync();
@@ -80,7 +82,7 @@ void main() {
       r'android:packageNames="([^"]*)"',
     ).firstMatch(config)!.group(1)!.split(',');
 
-    expect(packages.toSet(), browserAddressBars.keys.toSet());
+    expect(packages.toSet(), watchedPackages);
   });
 
   test('listens to events only while the service is enabled', () async {
@@ -92,7 +94,7 @@ void main() {
       onCancel: () => cancels++,
     );
     final received = <BrowserAddress>[];
-    final subscription = BrowserWatcher(
+    final subscription = ScreenWatcher(
       enabled: enabled.stream,
       events: events.stream,
     ).addresses().listen(received.add);
@@ -118,6 +120,77 @@ void main() {
 
     await subscription.cancel();
     expect(cancels, 2);
+    await enabled.close();
+    await events.close();
+  });
+
+  test('the device admin label matches the manifest string', () {
+    final strings = File(
+      'android/app/src/main/res/values/strings.xml',
+    ).readAsStringSync();
+    final label = RegExp(
+      r'<string name="device_admin_label">([^<]*)</string>',
+    ).firstMatch(strings)!.group(1);
+
+    expect(label, deviceAdminLabel);
+  });
+
+  test('the device admin screen is told apart by its admin row', () {
+    final own = screenFrom(
+      _event(
+        'com.android.settings',
+        nodes: [
+          _node('com.android.settings:id/admin_name', deviceAdminLabel),
+          _node('com.android.settings:id/admin_description', 'Locks blocks'),
+        ],
+      )..eventType = EventType.typeWindowStateChanged,
+    )!;
+    final other = screenFrom(
+      _event(
+        'com.android.settings',
+        nodes: [_node('com.android.settings:id/admin_name', 'Find My Device')],
+      )..eventType = EventType.typeWindowStateChanged,
+    )!;
+    final elsewhere = screenFrom(
+      _event(
+        _chrome,
+        nodes: [_node('com.android.settings:id/admin_name', deviceAdminLabel)],
+      )..eventType = EventType.typeWindowStateChanged,
+    )!;
+
+    expect(own.ownAdmin, isTrue);
+    expect(other.ownAdmin, isFalse);
+    expect(elsewhere.ownAdmin, isFalse);
+  });
+
+  test('screens report each window that appears', () async {
+    final enabled = StreamController<bool>();
+    final events = StreamController<AccessibilityEvent>.broadcast();
+    final screens = <Screen>[];
+    final subscription = ScreenWatcher(
+      enabled: enabled.stream,
+      events: events.stream,
+    ).screens().listen(screens.add);
+    enabled.add(true);
+    await pumpEventQueue();
+
+    events.add(
+      _event('com.android.settings')
+        ..eventType = EventType.typeWindowStateChanged,
+    );
+    events.add(
+      _event('com.android.settings')
+        ..eventType = EventType.typeWindowContentChanged,
+    );
+    events.add(_event(_chrome)..eventType = EventType.typeWindowStateChanged);
+    await pumpEventQueue();
+
+    expect(screens.map((screen) => screen.package), [
+      'com.android.settings',
+      _chrome,
+    ]);
+    expect(screens.every((screen) => !screen.ownAdmin), isTrue);
+    await subscription.cancel();
     await enabled.close();
     await events.close();
   });

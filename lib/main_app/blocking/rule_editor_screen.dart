@@ -11,6 +11,7 @@ import 'onboarding/permission_status.dart';
 import 'rule.dart';
 import 'rule_store.dart';
 import 'widgets/app_picker.dart';
+import 'widgets/note.dart';
 import 'widgets/trigger_editor.dart';
 import 'widgets/web_target_picker.dart';
 
@@ -266,7 +267,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
           _blockingSection(),
           if (widget.locked && widget.rule != null) ...[
             const SizedBox(height: 20),
-            _Note(
+            Note(
               key: const ValueKey('rule-locked'),
               icon: Icons.shield,
               message: loosens
@@ -278,7 +279,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
           ],
           if (_saveError) ...[
             const SizedBox(height: 20),
-            const _Note(
+            const Note(
               icon: Icons.error_outline,
               message: 'Could not save this schedule. Try again.',
             ),
@@ -411,7 +412,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
         ),
         if (_conditionNote case final note?) ...[
           const SizedBox(height: 14),
-          _Note(message: note),
+          Note(message: note),
         ],
       ],
     );
@@ -469,7 +470,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
         ),
         if (_blocksWeb && _accessibilityEnabled == false) ...[
           const SizedBox(height: 14),
-          _Note(
+          Note(
             message:
                 'Allow accessibility so SerenSync can read the address bar '
                 'and block websites and keywords.',
@@ -485,7 +486,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
         ],
         if (_blocksWeb && _trigger is! Schedule) ...[
           const SizedBox(height: 14),
-          const _Note(
+          const Note(
             message:
                 'Websites and keywords are blocked all day, because '
                 'browsing time does not count towards the limit.',
@@ -627,40 +628,6 @@ class _AppsLoadError extends StatelessWidget {
         children: [
           const Expanded(child: Text('Could not load your apps.')),
           TextButton(onPressed: onRetry, child: const Text('Retry')),
-        ],
-      ),
-    );
-  }
-}
-
-class _Note extends StatelessWidget {
-  final IconData icon;
-  final String message;
-  final Widget? action;
-
-  const _Note({
-    super.key,
-    this.icon = Icons.info_outline,
-    required this.message,
-    this.action,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
-      decoration: BoxDecoration(
-        border: Border.all(color: BlockingColors.outline),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: BlockingColors.accent),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(message, style: const TextStyle(color: Colors.white70)),
-          ),
-          if (action case final action?) ...[const SizedBox(width: 8), action],
         ],
       ),
     );

@@ -11,7 +11,6 @@ dependencies:
     sdk: flutter
   android_intent_plus: ^5.3.1
   apps_handler: ^2.0.0
-  battery_plus: ^7.1.1
   crypto: ^3.0.6
   device_policy_manager: ^1.0.0
   flutter_accessibility_service: ^1.2.0
