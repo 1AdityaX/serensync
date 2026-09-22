@@ -12,41 +12,27 @@ class AppOptionsDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      child: Container(
-        decoration: const BoxDecoration(
-          border: Border.fromBorderSide(BorderSide(color: Colors.white)),
-          color: Colors.black,
+    return SimpleDialog(
+      title: Text(app.displayName),
+      contentPadding: const EdgeInsets.fromLTRB(0, 8, 0, 12),
+      children: <Widget>[
+        ListTile(
+          title: const Text('App info', style: TextStyle(fontSize: 16)),
+          leading: const Icon(Icons.info_outline),
+          onTap: () {
+            unawaited(AppsHandler.openAppSettings(app.packageName));
+            Navigator.of(context).pop();
+          },
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.white),
-              ),
-              child: ListTile(title: Center(child: Text(app.displayName))),
-            ),
-            ListTile(
-              title: const Text('Settings'),
-              leading: const Icon(Icons.settings_outlined),
-              onTap: () {
-                unawaited(AppsHandler.openAppSettings(app.packageName));
-                Navigator.of(context).pop();
-              },
-            ),
-            ListTile(
-              title: const Text('Uninstall'),
-              leading: const Icon(Icons.delete_outline),
-              onTap: () {
-                unawaited(AppsHandler.uninstallApp(app.packageName));
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
+        ListTile(
+          title: const Text('Uninstall', style: TextStyle(fontSize: 16)),
+          leading: const Icon(Icons.delete_outline),
+          onTap: () {
+            unawaited(AppsHandler.uninstallApp(app.packageName));
+            Navigator.of(context).pop();
+          },
         ),
-      ),
+      ],
     );
   }
 }

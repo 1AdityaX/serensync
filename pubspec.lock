@@ -529,10 +529,10 @@ packages:
     dependency: "direct main"
     description:
       name: tamper_guard
-      sha256: "54d2b44660e4c210007d50aa67557d8f13881292c441db3da2c0b92bdeb077ca"
+      sha256: c9ba831c9f56b35da455f2951cdde950b07a7a16823cd4709a9e5ba1cf120857
       url: "https://pub.dev"
     source: hosted
-    version: "0.1.0"
+    version: "0.3.0"
   term_glyph:
     dependency: transitive
     description:

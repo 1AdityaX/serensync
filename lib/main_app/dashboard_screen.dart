@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../apps/app_service.dart';
+import '../theme.dart';
 import 'blocking/blocking_colors.dart';
 import 'blocking/blocking_engine.dart';
 import 'blocking/onboarding/permission_status.dart';
@@ -72,8 +73,15 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   @override
   Widget build(BuildContext context) {
+    final title = switch (_tab) {
+      _DashboardTab.pomodoro => 'Pomodoro',
+      _DashboardTab.blocks => 'Blocks',
+      _DashboardTab.strictMode => 'Strict mode',
+      _DashboardTab.stats => 'Stats',
+      _DashboardTab.settings => 'Settings',
+    };
     return Scaffold(
-      appBar: AppBar(title: const Text('SerenSync')),
+      appBar: AppBar(title: Text(title)),
       body: _buildBody(),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab.index,
@@ -125,13 +133,10 @@ class _DashboardScreenState extends State<DashboardScreen>
         onChanged: () => unawaited(_refresh()),
       ),
       _DashboardTab.stats => StatsTab(appService: widget.appService),
-      _DashboardTab.settings => ListView(
-        children: const [
-          ListTile(
-            title: Text('Minimal launcher'),
-            subtitle: Text('Coming soon'),
-          ),
-        ],
+      _DashboardTab.settings => _SettingsTab(
+        permissions: _permissions,
+        onAllow: (permission) =>
+            unawaited(widget.permissionStatus.request(permission)),
       ),
     };
     final permissions = _permissions;
@@ -142,7 +147,8 @@ class _DashboardScreenState extends State<DashboardScreen>
         : !permissions.overlay
         ? RequiredPermission.overlay
         : null;
-    final enforces = _tab != _DashboardTab.stats;
+    final enforces =
+        _tab != _DashboardTab.stats && _tab != _DashboardTab.settings;
     if (missing == null || !enforces) return body;
     return Column(
       children: [
@@ -185,14 +191,63 @@ class _PermissionBanner extends StatelessWidget {
             TextButton(
               key: const ValueKey('permission-banner-allow'),
               onPressed: onAllow,
-              style: TextButton.styleFrom(
-                foregroundColor: BlockingColors.accent,
-              ),
               child: const Text('Allow'),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Where a permission skipped during setup can be granted later.
+class _SettingsTab extends StatelessWidget {
+  const _SettingsTab({required this.permissions, required this.onAllow});
+
+  final PermissionState? permissions;
+  final ValueChanged<RequiredPermission> onAllow;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      children: [
+        const _SettingsHeader('Permissions'),
+        for (final permission in RequiredPermission.values)
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            title: Text(permissionTitle(permission)),
+            trailing: permissions?.granted(permission) ?? false
+                ? const Icon(Icons.check, color: BlockingColors.accent)
+                : TextButton(
+                    onPressed: () => onAllow(permission),
+                    child: const Text('Allow'),
+                  ),
+          ),
+        const _SettingsHeader('Launcher'),
+        const ListTile(
+          contentPadding: EdgeInsets.symmetric(horizontal: 4),
+          title: Text('Minimal launcher'),
+          subtitle: Text(
+            'Coming soon',
+            style: TextStyle(color: BlockingColors.textMuted),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingsHeader extends StatelessWidget {
+  const _SettingsHeader(this.title);
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 20, 4, 4),
+      child: Text(title, style: sectionLabel),
     );
   }
 }

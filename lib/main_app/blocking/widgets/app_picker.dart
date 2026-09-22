@@ -29,12 +29,7 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: BlockingColors.background,
-      appBar: AppBar(
-        centerTitle: true,
-        backgroundColor: BlockingColors.background,
-        title: const Text('Choose apps'),
-      ),
+      appBar: AppBar(title: const Text('Apps')),
       body: Padding(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
         child: AppPicker(
@@ -45,22 +40,11 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
       ),
       bottomNavigationBar: SafeArea(
         top: false,
-        child: Container(
-          color: BlockingColors.background,
+        child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
           child: FilledButton(
             key: const ValueKey('app-picker-done'),
             onPressed: () => Navigator.of(context).pop(_selectedPackages),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(58),
-              backgroundColor: BlockingColors.accent,
-              foregroundColor: BlockingColors.onAccent,
-              shape: const StadiumBorder(),
-              textStyle: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
             child: Text(
               _selectedPackages.isEmpty
                   ? 'Done'
@@ -104,20 +88,10 @@ class _AppPickerState extends State<AppPicker> {
 
   @override
   Widget build(BuildContext context) {
-    final count = widget.selectedPackages.length;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _searchField(),
         const SizedBox(height: 10),
-        if (count > 0)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
-            child: Text(
-              '$count ${count == 1 ? 'app' : 'apps'} will be blocked',
-              style: const TextStyle(color: Colors.white54, fontSize: 12),
-            ),
-          ),
         Expanded(child: _buildList()),
       ],
     );
@@ -139,11 +113,9 @@ class _AppPickerState extends State<AppPicker> {
           Expanded(
             child: TextField(
               key: const ValueKey('app-picker-search'),
-              cursorColor: BlockingColors.accent,
               decoration: const InputDecoration(
-                hintText: 'Search apps',
+                hintText: 'Search',
                 border: InputBorder.none,
-                hintStyle: TextStyle(color: Colors.white38),
               ),
               onChanged: (query) => setState(() => _query = query),
             ),
@@ -162,7 +134,12 @@ class _AppPickerState extends State<AppPicker> {
               if (app.displayName.toLowerCase().contains(query)) app,
           ];
     if (apps.isEmpty) {
-      return const Center(child: Text('No apps match that search.'));
+      return const Center(
+        child: Text(
+          'No matches.',
+          style: TextStyle(color: BlockingColors.textMuted),
+        ),
+      );
     }
     return ListView.builder(
       itemCount: apps.length,

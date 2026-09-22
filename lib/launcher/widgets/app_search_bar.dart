@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../main_app/blocking/blocking_colors.dart';
+
 class AppSearchBar extends StatefulWidget {
   final String query;
   final ValueChanged<String> onChanged;
@@ -51,15 +53,16 @@ class _AppSearchBarState extends State<AppSearchBar> {
       height: 45,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF191919),
+        color: BlockingColors.surface,
         borderRadius: BorderRadius.circular(23),
+        border: Border.all(color: BlockingColors.outline),
       ),
       child: Row(
         children: [
           IconButton(
             icon: Icon(
               _focusNode.hasFocus ? Icons.arrow_back : Icons.search,
-              color: Colors.white70,
+              color: BlockingColors.textMuted,
             ),
             onPressed: () {
               if (_focusNode.hasFocus) {
@@ -76,9 +79,8 @@ class _AppSearchBarState extends State<AppSearchBar> {
               controller: _controller,
               focusNode: _focusNode,
               decoration: const InputDecoration(
-                hintText: 'Search Apps',
+                hintText: 'Search',
                 border: InputBorder.none,
-                hintStyle: TextStyle(color: Colors.white70),
               ),
               onChanged: widget.onChanged,
             ),

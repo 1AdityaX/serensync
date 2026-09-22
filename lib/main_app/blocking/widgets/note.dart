@@ -29,7 +29,14 @@ class Note extends StatelessWidget {
           Icon(icon, color: iconColor),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(message, style: const TextStyle(color: Colors.white70)),
+            child: Text(
+              message,
+              style: const TextStyle(
+                fontSize: 13.5,
+                height: 1.4,
+                color: BlockingColors.textMuted,
+              ),
+            ),
           ),
           if (action case final action?) ...[const SizedBox(width: 8), action],
         ],

@@ -121,26 +121,10 @@ void main() {
       );
 
       expect(data, <Map<String, String>>[
-        <String, String>{
-          'packageName': blockedPackage,
-          'ruleName': 'One launch',
-          'host': '',
-        },
-        <String, String>{
-          'packageName': otherPackage,
-          'ruleName': 'One launch',
-          'host': '',
-        },
-        <String, String>{
-          'packageName': otherPackage,
-          'ruleName': 'Different rule',
-          'host': '',
-        },
-        <String, String>{
-          'packageName': browser,
-          'ruleName': 'No Reels',
-          'host': 'instagram.com',
-        },
+        <String, String>{'ruleName': 'One launch', 'host': ''},
+        <String, String>{'ruleName': 'One launch', 'host': ''},
+        <String, String>{'ruleName': 'Different rule', 'host': ''},
+        <String, String>{'ruleName': 'No Reels', 'host': 'instagram.com'},
       ]);
     },
   );

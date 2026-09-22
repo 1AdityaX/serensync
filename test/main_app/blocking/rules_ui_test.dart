@@ -478,7 +478,7 @@ void main() {
 
     expect(ruleStore.rules, isEmpty);
     expect(find.text('Temporary'), findsNothing);
-    expect(find.text('No limits yet'), findsOneWidget);
+    expect(find.text('No blocks yet.'), findsOneWidget);
     expect(blockingService.syncs, 1);
   });
 

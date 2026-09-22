@@ -49,12 +49,7 @@ class _WebTargetPickerState extends State<WebTargetPicker> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: BlockingColors.background,
-      appBar: AppBar(
-        centerTitle: true,
-        backgroundColor: BlockingColors.background,
-        title: Text(widget.title),
-      ),
+      appBar: AppBar(title: Text(widget.title)),
       body: Padding(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
         child: Column(
@@ -66,7 +61,7 @@ class _WebTargetPickerState extends State<WebTargetPicker> {
                 padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
                 child: Text(
                   widget.invalidMessage,
-                  style: const TextStyle(color: Colors.redAccent),
+                  style: const TextStyle(color: BlockingColors.rising),
                 ),
               ),
             const SizedBox(height: 10),
@@ -75,7 +70,7 @@ class _WebTargetPickerState extends State<WebTargetPicker> {
                   ? const Center(
                       child: Text(
                         'Nothing added yet.',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(color: BlockingColors.textMuted),
                       ),
                     )
                   : ListView(
@@ -89,22 +84,11 @@ class _WebTargetPickerState extends State<WebTargetPicker> {
       ),
       bottomNavigationBar: SafeArea(
         top: false,
-        child: Container(
-          color: BlockingColors.background,
+        child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
           child: FilledButton(
             key: const ValueKey('web-target-done'),
             onPressed: () => Navigator.of(context).pop(_values),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(58),
-              backgroundColor: BlockingColors.accent,
-              foregroundColor: BlockingColors.onAccent,
-              shape: const StadiumBorder(),
-              textStyle: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
             child: Text(_values.isEmpty ? 'Done' : 'Done · ${_values.length}'),
           ),
         ),
@@ -127,14 +111,12 @@ class _WebTargetPickerState extends State<WebTargetPicker> {
             child: TextField(
               key: const ValueKey('web-target-input'),
               controller: _controller,
-              cursorColor: BlockingColors.accent,
               autocorrect: false,
               keyboardType: TextInputType.url,
               textInputAction: TextInputAction.done,
               decoration: InputDecoration(
                 hintText: widget.hint,
                 border: InputBorder.none,
-                hintStyle: const TextStyle(color: Colors.white38),
               ),
               onSubmitted: (_) => _add(),
             ),
@@ -163,7 +145,7 @@ class _WebTargetPickerState extends State<WebTargetPicker> {
       trailing: IconButton(
         key: ValueKey('remove-web-target-$value'),
         tooltip: 'Remove $value',
-        icon: const Icon(Icons.close, color: Colors.white54),
+        icon: const Icon(Icons.close, color: BlockingColors.textMuted),
         onPressed: () => setState(() => _values.remove(value)),
       ),
     );

@@ -20,7 +20,7 @@ class RulesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('App limits')),
+      appBar: AppBar(title: const Text('Blocks')),
       body: RuleList(
         ruleStore: ruleStore,
         appService: appService,

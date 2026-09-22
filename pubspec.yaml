@@ -17,7 +17,7 @@ dependencies:
   flutter_overlay_window: ^0.5.0
   shared_preferences: ^2.5.5
   sqflite: ^2.4.2+1
-  tamper_guard: ^0.1.0
+  tamper_guard: ^0.3.0
   usage_stats: ^2.0.1
 
 dev_dependencies:
