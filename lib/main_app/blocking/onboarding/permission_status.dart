@@ -1,6 +1,6 @@
 import 'package:android_intent_plus/android_intent.dart';
-import 'package:flutter_accessibility_service/flutter_accessibility_service.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:tamper_guard/tamper_guard.dart';
 import 'package:usage_stats/usage_stats.dart';
 
 import '../blocking_engine.dart';
@@ -63,8 +63,7 @@ class PermissionStatus {
         NotificationPermission.granted;
     final batteryOptimisation =
         await FlutterForegroundTask.isIgnoringBatteryOptimizations;
-    final accessibility =
-        await FlutterAccessibilityService.isAccessibilityPermissionEnabled();
+    final accessibility = await TamperGuard.isServiceEnabled;
     return PermissionState(
       usageAccess: usageAccess,
       overlay: overlay,
@@ -88,7 +87,7 @@ class PermissionStatus {
       case RequiredPermission.batteryOptimisation:
         await FlutterForegroundTask.requestIgnoreBatteryOptimization();
       case RequiredPermission.accessibility:
-        await FlutterAccessibilityService.requestAccessibilityPermission();
+        await TamperGuard.openAccessibilitySettings();
     }
   }
 

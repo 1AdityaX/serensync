@@ -1,17 +1,9 @@
-import 'dart:async';
-
-import 'package:flutter_accessibility_service/accessibility_event.dart';
-import 'package:flutter_accessibility_service/constants.dart';
-import 'package:flutter_accessibility_service/flutter_accessibility_service.dart';
+import 'package:tamper_guard/tamper_guard.dart';
 
 import '../strict/strict_guard.dart';
 import 'rule.dart';
 
 typedef BrowserAddress = ({String browser, WebAddress? address});
-
-/// A window that came to the front. [ownAdmin] marks Settings showing this
-/// app's device-admin entry, the one screen where it can be deactivated.
-typedef Screen = ({String package, bool ownAdmin});
 
 /// Every package the accessibility service listens to. Keep in sync with
 /// packageNames in android/app/src/main/res/xml/accessibilityservice.xml.
@@ -49,93 +41,39 @@ const browserAddressBars = <String, String>{
   'com.coloros.browser': 'azt',
 };
 
-/// The address a supported browser shows in [event], or null when the event
-/// does not carry that browser's address bar.
-BrowserAddress? browserAddressFrom(AccessibilityEvent event) {
-  final browser = event.packageName;
-  final viewId = browserAddressBars[browser];
-  if (browser == null || viewId == null) return null;
+/// The address bars the service reads.
+List<TextWatch> get browserWatches => [
+  for (final MapEntry(key: browser, value: viewId)
+      in browserAddressBars.entries)
+    TextWatch(packageName: browser, viewId: '$browser:id/$viewId'),
+];
 
-  final addressBar = '$browser:id/$viewId';
-  for (final node in <AccessibilityEvent>[event, ...?event.subNodes]) {
-    if (node.nodeId == addressBar) {
-      return (browser: browser, address: parseAddress(_text(node)));
-    }
-  }
-  return null;
-}
-
-Screen? screenFrom(AccessibilityEvent event) {
-  final package = event.packageName;
-  if (package == null || event.eventType != EventType.typeWindowStateChanged) {
+/// The address a supported browser shows, or null when [change] is not a
+/// browser's address bar.
+BrowserAddress? browserAddressFrom(TextChange change) {
+  final viewId = browserAddressBars[change.packageName];
+  if (viewId == null || change.viewId != '${change.packageName}:id/$viewId') {
     return null;
   }
-  return (
-    package: package,
-    ownAdmin:
-        settingsPackages.contains(package) &&
-        <AccessibilityEvent>[event, ...?event.subNodes].any(
-          (node) =>
-              (node.nodeId?.endsWith(':id/admin_name') ?? false) &&
-              _text(node) == deviceAdminLabel,
-        ),
-  );
+  return (browser: change.packageName, address: parseAddress(change.text));
 }
 
-// The plugin stringifies a missing text as 'null'.
-String _text(AccessibilityEvent node) {
-  return switch (node.text) {
-    null || 'null' => '',
-    final text => text,
-  };
-}
-
-/// Accessibility events from the packages in [watchedPackages].
+/// What the accessibility service reports from the watched packages.
 class ScreenWatcher {
-  ScreenWatcher({Stream<bool>? enabled, Stream<AccessibilityEvent>? events})
-    : _enabled =
-          enabled ??
-          FlutterAccessibilityService.onAccessibilityServiceStatusChanged,
-      _events = events ?? FlutterAccessibilityService.accessStream;
+  ScreenWatcher({Stream<TextChange>? texts, Stream<WindowChange>? windows})
+    : _texts = texts ?? TamperGuard.textChanges,
+      _windows = windows ?? TamperGuard.windowChanges;
 
-  final Stream<bool> _enabled;
-  final Stream<AccessibilityEvent> _events;
+  final Stream<TextChange> _texts;
+  final Stream<WindowChange> _windows;
 
   /// Address changes in supported browsers.
-  Stream<BrowserAddress> addresses() => _whileEnabled(browserAddressFrom);
+  Stream<BrowserAddress> addresses() => _texts
+      .map(browserAddressFrom)
+      .where((address) => address != null)
+      .cast<BrowserAddress>();
 
-  /// Each window from a package in [watchedPackages] as it comes to the
-  /// front; faster than the usage-stats poll, but blind to other packages.
-  Stream<Screen> screens() => _whileEnabled(screenFrom);
-
-  // The plugin only delivers events to subscriptions made while the
-  // accessibility service is enabled, so the event stream is subscribed
-  // afresh each time the service is enabled.
-  Stream<T> _whileEnabled<T extends Object>(
-    T? Function(AccessibilityEvent event) map,
-  ) {
-    late final StreamController<T> controller;
-    StreamSubscription<bool>? enabled;
-    StreamSubscription<AccessibilityEvent>? events;
-    controller = StreamController<T>(
-      onListen: () {
-        enabled = _enabled.listen((isEnabled) {
-          if (!isEnabled) {
-            unawaited(events?.cancel());
-            events = null;
-            return;
-          }
-          events ??= _events.listen((event) {
-            final value = map(event);
-            if (value != null) controller.add(value);
-          });
-        });
-      },
-      onCancel: () async {
-        await enabled?.cancel();
-        await events?.cancel();
-      },
-    );
-    return controller.stream;
-  }
+  /// The package of each window that comes to the front, the moment it
+  /// does; faster than the usage-stats poll, but only for watched packages.
+  Stream<String> screens() => _windows.map((window) => window.packageName);
 }

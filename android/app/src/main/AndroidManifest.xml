@@ -62,7 +62,7 @@
                 android:value="Displays the user-configured blocking screen over restricted apps" />
         </service>
         <service
-            android:name="slayer.accessibility.service.flutter_accessibility_service.AccessibilityListener"
+            android:name="dev.aditya.tamper_guard.GuardService"
             android:exported="false"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
@@ -73,14 +73,14 @@
                 android:resource="@xml/accessibilityservice" />
         </service>
         <receiver
-            android:name="device.policy.manager.DeviceAdmin"
+            android:name="dev.aditya.tamper_guard.AdminReceiver"
             android:exported="true"
             android:label="@string/device_admin_label"
             android:description="@string/device_admin_description"
             android:permission="android.permission.BIND_DEVICE_ADMIN">
             <meta-data
                 android:name="android.app.device_admin"
-                android:resource="@xml/policies" />
+                android:resource="@xml/tamper_guard_admin" />
             <intent-filter>
                 <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
                 <action android:name="android.app.action.DEVICE_ADMIN_DISABLE_REQUESTED" />

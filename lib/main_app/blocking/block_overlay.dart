@@ -1,10 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_accessibility_service/constants.dart';
-import 'package:flutter_accessibility_service/flutter_accessibility_service.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:tamper_guard/tamper_guard.dart';
 
 import 'rule.dart';
 
@@ -152,9 +151,7 @@ class _BlockScreenState extends State<_BlockScreen> {
     if (_host.isEmpty) {
       FlutterForegroundTask.launchApp();
     } else {
-      await FlutterAccessibilityService.performGlobalAction(
-        GlobalAction.globalActionBack,
-      );
+      await TamperGuard.performGlobalAction(GuardAction.back);
     }
   }
 

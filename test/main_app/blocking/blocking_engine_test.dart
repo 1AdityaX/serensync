@@ -387,13 +387,10 @@ void main() {
     final engine = BlockingEngine(foregroundApp: foreground, overlay: overlay);
     engine.guardPackages(const <String>{'com.android.settings'});
 
-    await engine.screenChanged((package: 'com.example.other', ownAdmin: false));
+    await engine.screenChanged('com.example.other');
     expect(overlay.showCalls, 0);
 
-    await engine.screenChanged((
-      package: 'com.android.settings',
-      ownAdmin: false,
-    ));
+    await engine.screenChanged('com.android.settings');
     expect(overlay.packageName, 'com.android.settings');
     expect(overlay.ruleName, 'Strict mode');
   });
@@ -407,10 +404,7 @@ void main() {
     await engine.tick(now);
     expect(overlay.visible, isFalse);
 
-    await engine.screenChanged((
-      package: 'com.android.settings',
-      ownAdmin: false,
-    ));
+    await engine.screenChanged('com.android.settings');
     await engine.addressChanged(_page(browser, 'example.com'), now);
     expect(overlay.visible, isTrue);
     expect(overlay.ruleName, 'Strict mode');
@@ -418,37 +412,8 @@ void main() {
     foreground.screenInteractive = false;
     await engine.tick(now);
     expect(overlay.visible, isFalse);
-    await engine.screenChanged((
-      package: 'com.android.settings',
-      ownAdmin: false,
-    ));
+    await engine.screenChanged('com.android.settings');
     expect(overlay.visible, isFalse);
-  });
-
-  test('the own device admin screen is backed out of while uninstalls are '
-      'blocked', () async {
-    var backs = 0;
-    final overlay = FakeBlockOverlay();
-    final engine = BlockingEngine(
-      foregroundApp: FakeForegroundApp(packageName: 'com.android.settings'),
-      overlay: overlay,
-      goBack: () async => backs++,
-    );
-    const admin = (package: 'com.android.settings', ownAdmin: true);
-
-    engine.guardPackages(const <String>{'com.android.settings'});
-    await engine.screenChanged(admin);
-    expect(backs, 0);
-    expect(overlay.showCalls, 1);
-
-    engine.guardPackages(const <String>{'com.android.settings'}, admin: true);
-    await engine.screenChanged(admin);
-    expect(backs, 1);
-    await engine.screenChanged((
-      package: 'com.android.settings',
-      ownAdmin: false,
-    ));
-    expect(backs, 1);
   });
 
   test('the recents screen is guarded by its class name', () async {

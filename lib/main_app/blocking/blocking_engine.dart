@@ -2,9 +2,8 @@ import 'dart:async';
 
 import 'package:apps_handler/apps_handler.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_accessibility_service/constants.dart';
-import 'package:flutter_accessibility_service/flutter_accessibility_service.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:tamper_guard/tamper_guard.dart';
 import 'package:usage_stats/usage_stats.dart';
 
 import '../pomodoro/pomodoro_alerts.dart';
@@ -36,24 +35,18 @@ class BlockingEngine {
     BlockOverlay? overlay,
     List<BlockRule> rules = const <BlockRule>[],
     this.ownPackage = applicationId,
-    Future<void> Function()? goBack,
   }) : foregroundApp = foregroundApp ?? ForegroundApp(),
        overlay = overlay ?? BlockOverlay(),
-       goBack = goBack ?? _pressBack,
        _rules = List<BlockRule>.unmodifiable(rules);
 
   final ForegroundApp foregroundApp;
   final BlockOverlay overlay;
   final String ownPackage;
 
-  /// Leaves the current screen; the accessibility service's Back.
-  final Future<void> Function() goBack;
-
   List<BlockRule> _rules;
   Set<int> _forced = const <int>{};
   Set<String> _guarded = const <String>{};
   bool _guardRecents = false;
-  bool _guardAdmin = false;
   final Map<String, WebAddress> _addresses = <String, WebAddress>{};
   Future<void> _queue = Future<void>.value();
   String? _previousPackage;
@@ -63,20 +56,14 @@ class BlockingEngine {
   Future<bool?> tick(DateTime now) => _serialized(() => _tick(now));
 
   /// Blocks a guarded package the moment its window appears, ahead of the
-  /// next tick. The deactivation screen for this app's device admin is backed
-  /// out of first, ahead of any queued overlay work, so Deactivate is never
-  /// in reach.
-  Future<void> screenChanged(Screen screen) async {
-    if (_guardAdmin && screen.ownAdmin) await goBack();
-    if (!_guarded.contains(screen.package) || _screenInteractive == false) {
+  /// next tick.
+  Future<void> screenChanged(String packageName) async {
+    if (!_guarded.contains(packageName) || _screenInteractive == false) {
       return;
     }
     await _serialized(() async {
-      _previousPackage = screen.package;
-      await overlay.show(
-        packageName: screen.package,
-        ruleName: _strictModeName,
-      );
+      _previousPackage = packageName;
+      await overlay.show(packageName: packageName, ruleName: _strictModeName);
     });
   }
 
@@ -107,14 +94,9 @@ class BlockingEngine {
 
   /// Screens strict mode blocks outright until the next call: the packages
   /// given and, with [recents], the launcher's recent-apps screen.
-  void guardPackages(
-    Set<String> packages, {
-    bool recents = false,
-    bool admin = false,
-  }) {
+  void guardPackages(Set<String> packages, {bool recents = false}) {
     _guarded = Set<String>.unmodifiable(packages);
     _guardRecents = recents;
-    _guardAdmin = admin;
   }
 
   Future<bool?> _tick(DateTime now) async {
@@ -237,12 +219,6 @@ bool _enforcementWanted(
   };
 }
 
-Future<void> _pressBack() async {
-  await FlutterAccessibilityService.performGlobalAction(
-    GlobalAction.globalActionBack,
-  );
-}
-
 bool _strictGuards(StrictMode? strict, DateTime now) {
   return strict != null &&
       strict.locks.isNotEmpty &&
@@ -321,7 +297,8 @@ class BlockingTask extends TaskHandler {
   final StrictModeStore _strictModeStore;
   final ScreenWatcher _screenWatcher;
   StreamSubscription<BrowserAddress>? _addresses;
-  StreamSubscription<Screen>? _screens;
+  StreamSubscription<String>? _screens;
+  bool? _adminGuarded;
   StreamSubscription<AppEvent>? _appChanges;
   bool _tickActive = false;
   Timer? _permissionCheck;
@@ -341,8 +318,9 @@ class BlockingTask extends TaskHandler {
       (change) => unawaited(_engine.addressChanged(change, DateTime.now())),
     );
     _screens = _screenWatcher.screens().listen(
-      (screen) => unawaited(_engine.screenChanged(screen)),
+      (package) => unawaited(_engine.screenChanged(package)),
     );
+    await TamperGuard.setTextWatches(browserWatches);
     _appChanges = AppsHandler.appChanges.listen(
       (_) => unawaited(_refreshInstallTimes()),
     );
@@ -438,8 +416,16 @@ class BlockingTask extends TaskHandler {
           ? guardedPackages(strict!, installTimes: _installTimes)
           : const <String>{},
       recents: guards && strict!.locks.contains(StrictLock.recents),
-      admin: guards && strict!.locks.contains(StrictLock.uninstall),
     );
+    // The accessibility service closes the device-admin screen on its own.
+    // Writing the rules costs a channel call and a preferences write, so they
+    // go out only when they change; they outlive this service and are also
+    // cleared when the admin is deactivated.
+    final adminGuarded = guards && strict!.locks.contains(StrictLock.uninstall);
+    if (adminGuarded != _adminGuarded) {
+      _adminGuarded = adminGuarded;
+      await TamperGuard.setRules(adminGuarded ? adminGuardRules : const []);
+    }
     if (!_enforcementWanted(_rules, _session, strict, now)) {
       await FlutterForegroundTask.stopService();
     }

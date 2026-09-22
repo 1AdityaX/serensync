@@ -25,8 +25,9 @@ combines a quiet home screen with rules that interrupt distracting app use.
 - Strict mode that locks blocks behind a timer of up to 99 days or a PIN with
   an optional cooldown, plus an emergency unlock; while on, blocks can only be
   tightened, and the Settings app, the recent-apps screen, and newly installed
-  apps can be blocked, while a
-  device-administrator registration keeps the app installed
+  apps can be blocked, while a device-administrator registration keeps the app
+  installed and the accessibility service closes the screen that could
+  deactivate it the instant it appears
 - Foreground blocking service that starts by itself while a block is enabled,
   a focus session runs, or strict mode guards apps, and restarts after boot
   and app updates
