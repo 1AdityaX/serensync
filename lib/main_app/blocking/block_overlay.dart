@@ -5,6 +5,8 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:tamper_guard/tamper_guard.dart';
 
+import '../../theme.dart';
+import 'blocking_colors.dart';
 import 'rule.dart';
 
 class BlockOverlay {
@@ -52,11 +54,7 @@ class BlockOverlay {
         return;
       }
     }
-    await _shareData(<String, String>{
-      'packageName': packageName,
-      'ruleName': ruleName,
-      'host': host,
-    });
+    await _shareData(<String, String>{'ruleName': ruleName, 'host': host});
     _visiblePackage = packageName;
     _visibleHost = host;
     _visibleRuleName = ruleName;
@@ -99,9 +97,10 @@ class BlockOverlayApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: _BlockScreen(),
+      theme: appTheme,
+      home: const _BlockScreen(),
     );
   }
 }
@@ -115,9 +114,8 @@ class _BlockScreen extends StatefulWidget {
 
 class _BlockScreenState extends State<_BlockScreen> {
   StreamSubscription<Object?>? _messages;
-  String _packageName = '';
   String _host = '';
-  String _ruleName = 'A blocking rule';
+  String _ruleName = 'A block';
 
   @override
   void initState() {
@@ -134,12 +132,10 @@ class _BlockScreenState extends State<_BlockScreen> {
 
   void _receive(Object? message) {
     if (message case {
-      'packageName': final String packageName,
       'ruleName': final String ruleName,
       'host': final String host,
     }) {
       setState(() {
-        _packageName = packageName;
         _ruleName = ruleName;
         _host = host;
       });
@@ -157,45 +153,61 @@ class _BlockScreenState extends State<_BlockScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final subject = _host.isEmpty ? _packageName : _host;
     return Material(
-      color: const Color(0xff12130f),
+      color: BlockingColors.background,
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              const Icon(
-                Icons.lock_outline,
-                color: Color(0xffd8e2c4),
-                size: 48,
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Blocked by $_ruleName',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Color(0xfff3f4ed),
-                  fontSize: 28,
-                  fontWeight: FontWeight.w600,
+              Container(
+                width: 72,
+                height: 72,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: BlockingColors.accent.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.lock_outline,
+                  color: BlockingColors.accent,
+                  size: 32,
                 ),
               ),
-              if (subject.isNotEmpty) ...[
-                const SizedBox(height: 12),
+              const SizedBox(height: 28),
+              const Text(
+                'Blocked',
+                textAlign: TextAlign.center,
+                style: sectionLabel,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _ruleName,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 28,
+                  height: 1.15,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.6,
+                ),
+              ),
+              if (_host.isNotEmpty) ...[
+                const SizedBox(height: 8),
                 Text(
-                  subject,
+                  _host,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    color: Color(0xffa9ad9f),
                     fontSize: 14,
+                    color: BlockingColors.textMuted,
                   ),
                 ),
               ],
-              const SizedBox(height: 32),
+              const SizedBox(height: 36),
               FilledButton(
                 onPressed: _leave,
-                child: Text(_host.isEmpty ? 'Return home' : 'Go back'),
+                child: Text(_host.isEmpty ? 'Go home' : 'Go back'),
               ),
             ],
           ),

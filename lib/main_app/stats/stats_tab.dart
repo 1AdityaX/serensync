@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:usage_stats/usage_stats.dart';
 
 import '../../apps/app_service.dart';
+import '../../theme.dart';
 import '../blocking/blocking_colors.dart';
 import '../blocking/rule.dart';
 import 'usage_report.dart';
@@ -180,7 +181,7 @@ class _StatsTabState extends State<StatsTab> with WidgetsBindingObserver {
     if (view == null) {
       return Center(
         child: _loadError == null
-            ? const CircularProgressIndicator(color: BlockingColors.accent)
+            ? const CircularProgressIndicator()
             : _Retry(onRetry: () => unawaited(_load())),
       );
     }
@@ -276,15 +277,7 @@ class _StatsTabState extends State<StatsTab> with WidgetsBindingObserver {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'SCREEN TIME',
-            style: TextStyle(
-              fontSize: 11,
-              letterSpacing: 1.2,
-              fontWeight: FontWeight.w700,
-              color: BlockingColors.textMuted,
-            ),
-          ),
+          const Text('Screen time', style: sectionLabel),
           const SizedBox(height: 10),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -591,7 +584,7 @@ class _EmptyUsage extends StatelessWidget {
       padding: EdgeInsets.symmetric(vertical: 28),
       child: Center(
         child: Text(
-          'No app activity recorded yet.',
+          'Nothing recorded yet.',
           style: TextStyle(color: BlockingColors.textMuted, fontSize: 13),
         ),
       ),
@@ -611,11 +604,7 @@ class _Retry extends StatelessWidget {
       children: [
         const Text('Could not read your usage.'),
         const SizedBox(height: 8),
-        TextButton(
-          style: TextButton.styleFrom(foregroundColor: BlockingColors.accent),
-          onPressed: onRetry,
-          child: const Text('Retry'),
-        ),
+        TextButton(onPressed: onRetry, child: const Text('Retry')),
       ],
     );
   }
@@ -655,8 +644,8 @@ class _UsageAccessGate extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'SerenSync reads Android usage data on your device to show how '
-              'long you spend in each app. Nothing leaves your phone.',
+              'Shows how long you spend in each app. Nothing leaves your '
+              'phone.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13.5,
@@ -668,20 +657,7 @@ class _UsageAccessGate extends StatelessWidget {
             FilledButton(
               key: const ValueKey('grant-usage-access'),
               onPressed: onGrant,
-              style: FilledButton.styleFrom(
-                backgroundColor: BlockingColors.accent,
-                foregroundColor: BlockingColors.onAccent,
-                shape: const StadiumBorder(),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 26,
-                  vertical: 14,
-                ),
-                textStyle: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              child: const Text('Grant usage access'),
+              child: const Text('Allow'),
             ),
           ],
         ),

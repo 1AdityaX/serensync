@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../theme.dart';
 import '../blocking/blocking_colors.dart';
 import '../blocking/blocking_engine.dart';
 import '../blocking/rule.dart';
@@ -134,9 +135,7 @@ class _PomodoroTabState extends State<PomodoroTab> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final rules = _rules;
     if (rules == null) {
-      return const Center(
-        child: CircularProgressIndicator(color: BlockingColors.accent),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
     final session = _session;
     if (session == null) {
@@ -232,15 +231,7 @@ class _Setup extends StatelessWidget {
             ),
           ),
         ),
-        const Padding(
-          padding: EdgeInsets.only(top: 12),
-          child: Text(
-            'Drag the ring to set the focus length.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: BlockingColors.textMuted),
-          ),
-        ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 28),
         Row(
           children: [
             Expanded(
@@ -307,20 +298,12 @@ class _Setup extends StatelessWidget {
         ),
         const Padding(
           padding: EdgeInsets.fromLTRB(0, 28, 0, 10),
-          child: Text(
-            'Blocked during focus',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: BlockingColors.textMuted,
-            ),
-          ),
+          child: Text('Blocked during focus', style: sectionLabel),
         ),
         if (rules.isEmpty)
           const Text(
-            'No blocks yet. Create one in Blocks to lock apps while you '
-            'focus, or run the timer on its own.',
-            style: TextStyle(color: BlockingColors.textMuted, height: 1.4),
+            'No blocks yet. The timer still runs.',
+            style: TextStyle(color: BlockingColors.textMuted),
           )
         else
           Wrap(
@@ -352,7 +335,11 @@ class _Setup extends StatelessWidget {
             ],
           ),
         const SizedBox(height: 32),
-        _PrimaryButton(label: 'Start focus', onPressed: onStart),
+        FilledButton(
+          key: const ValueKey('pomodoro-primary'),
+          onPressed: onStart,
+          child: const Text('Start focus'),
+        ),
       ],
     );
   }
@@ -452,12 +439,6 @@ class _Running extends StatelessWidget {
           OutlinedButton(
             key: const ValueKey('pomodoro-end'),
             onPressed: onEnd,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white,
-              side: const BorderSide(color: BlockingColors.outline),
-              shape: const StadiumBorder(),
-              padding: const EdgeInsets.symmetric(vertical: 16),
-            ),
             child: const Text('End session'),
           ),
         ],
@@ -524,7 +505,11 @@ class _Message extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          _PrimaryButton(label: primary.$1, onPressed: primary.$2),
+          FilledButton(
+            key: const ValueKey('pomodoro-primary'),
+            onPressed: primary.$2,
+            child: Text(primary.$1),
+          ),
           if (onEnd != null)
             TextButton(
               key: const ValueKey('pomodoro-end'),
@@ -636,29 +621,6 @@ class _Stepper extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _PrimaryButton extends StatelessWidget {
-  const _PrimaryButton({required this.label, required this.onPressed});
-
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return FilledButton(
-      key: const ValueKey('pomodoro-primary'),
-      onPressed: onPressed,
-      style: FilledButton.styleFrom(
-        backgroundColor: BlockingColors.accent,
-        foregroundColor: BlockingColors.onAccent,
-        shape: const StadiumBorder(),
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-      ),
-      child: Text(label),
     );
   }
 }

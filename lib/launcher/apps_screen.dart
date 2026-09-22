@@ -121,7 +121,8 @@ class _AppsScreenState extends State<AppsScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Error loading apps'),
+            const Text('Could not load your apps.'),
+            const SizedBox(height: 8),
             TextButton(onPressed: _loadApps, child: const Text('Retry')),
           ],
         ),

@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../../theme.dart';
 import '../blocking/blocking_colors.dart';
 import '../blocking/blocking_engine.dart';
 import '../blocking/rule.dart';
@@ -17,8 +18,8 @@ import 'uninstall_guard.dart';
 const _caveat =
     'Nothing here stops Safe mode or a computer with developer tools.';
 const _adminRefused =
-    'Blocking uninstalls needs SerenSync as a device admin. Allow it when '
-    'Android asks, or leave that lock off.';
+    'Blocking uninstalls needs SerenSync as a device admin. Allow it, or '
+    'leave that lock off.';
 const _minTimer = Duration(minutes: 5);
 const _maxLength = Duration(days: 99);
 const _quickTimers = <Duration>[
@@ -295,8 +296,6 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
   Future<void> _unlock(StrictMode strict) async {
     final pin = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: BlockingColors.surface,
-      shape: _sheetShape,
       showDragHandle: true,
       isScrollControlled: true,
       useSafeArea: true,
@@ -333,11 +332,7 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    if (!_loaded) {
-      return const Center(
-        child: CircularProgressIndicator(color: BlockingColors.accent),
-      );
-    }
+    if (!_loaded) return const Center(child: CircularProgressIndicator());
     final strict = _strict;
     final now = DateTime.now();
     if (strict == null) return _flow();
@@ -379,7 +374,7 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
     return switch (step) {
       _Step.end => _StepPage(
         title: 'How will it end?',
-        body: 'Pick one. Your blocks stay locked until then.',
+        body: 'Your blocks stay locked until then.',
         footer: _PlanLine(_planSentence(now, l10n)),
         primaryLabel: 'Continue',
         onPrimary: _next,
@@ -390,9 +385,7 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
               key: const ValueKey('strict-end-timer'),
               icon: Icons.timer_outlined,
               title: 'Timer',
-              detail:
-                  'Ends on its own when the time is up. Nothing ends it '
-                  'earlier.',
+              detail: 'Ends by itself. Nothing ends it earlier.',
               selected: _timed,
               onTap: () => setState(() => _timed = true),
             ),
@@ -403,9 +396,7 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
               key: const ValueKey('strict-end-pin'),
               icon: Icons.key_outlined,
               title: 'PIN',
-              detail:
-                  'Ends when the PIN is entered. Best kept by someone you '
-                  'trust.',
+              detail: 'Ends with a PIN. Give it to someone you trust.',
               selected: !_timed,
               onTap: () => setState(() => _timed = false),
             ),
@@ -414,7 +405,6 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
       ),
       _Step.timer => _StepPage(
         title: 'For how long?',
-        body: 'From five minutes to 99 days. Strict mode ends by itself.',
         footer: _PlanLine(
           'Ends ${_untilLabel(now.add(_timerLength), now, l10n)}.',
         ),
@@ -442,9 +432,8 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
       _Step.pin => _StepPage(
         title: _pinFirst == null ? 'Choose a PIN' : 'Confirm your PIN',
         body: _pinFirst == null
-            ? 'Four to eight digits. Ask someone you trust to pick it and '
-                  'keep it from you.'
-            : 'Type the same PIN once more.',
+            ? 'Four to eight digits. Someone you trust should keep it.'
+            : null,
         primaryLabel: 'Continue',
         onPrimary: _pinReady ? _next : null,
         onBack: _back,
@@ -471,9 +460,7 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
       ),
       _Step.cooldown => _StepPage(
         title: 'Wait before unlocking?',
-        body:
-            'After you ask to unlock, the PIN only counts once this has '
-            'passed. You can cancel the request while it waits.',
+        body: 'The PIN only counts this long after you ask to unlock.',
         footer: _PlanLine(
           _cooldown == Duration.zero
               ? 'No wait. The PIN unlocks at once.'
@@ -504,8 +491,8 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
       _Step.locks => _StepPage(
         title: 'What stays locked?',
         body:
-            'Your blocks are locked either way. These shut the side doors, '
-            'and can be added later but never removed.',
+            'Your blocks are locked either way. These can be added later, '
+            'never removed.',
         primaryLabel: 'Continue',
         onPrimary: _next,
         onBack: _back,
@@ -526,9 +513,7 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
                   ? _lockCard(
                       lock,
                       on: true,
-                      detail:
-                          'Kept on by ${_join(_forcedSettingsCauses)}. The '
-                          'clock and device admin live in Settings.',
+                      detail: 'Kept on by ${_join(_forcedSettingsCauses)}.',
                       onChanged: null,
                     )
                   : _lockCard(
@@ -545,7 +530,7 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
         title: _timed
             ? 'Lock for ${_lengthLabel(_timerLength)}?'
             : 'Lock until the PIN?',
-        body: 'Read it once more. Undoing it is meant to be hard.',
+        body: 'Undoing this is meant to be hard.',
         primaryKey: const ValueKey('strict-activate'),
         primaryLabel: _timed
             ? 'Lock for ${_lengthLabel(_timerLength)}'
@@ -561,8 +546,6 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
               label: _timed ? _lengthLabel(_timerLength) : 'Until the PIN',
             ),
           ),
-          const SizedBox(height: 12),
-          _PlanLine(_planSentence(now, l10n)),
           const SizedBox(height: 20),
           _Card(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -611,8 +594,8 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
         icon: Icons.event,
         eyebrow: 'Ends',
         value: _timed
-            ? '${_untilLabel(now.add(_timerLength), now, l10n)} '
-                  '(${_lengthLabel(_timerLength)}). Nothing ends it earlier.'
+            ? '${_untilLabel(now.add(_timerLength), now, l10n)}. Nothing '
+                  'ends it earlier.'
             : cooldown == null
             ? 'When the PIN is entered.'
             : 'When the PIN is entered, ${_lengthLabel(cooldown)} after you '
@@ -635,16 +618,16 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
           icon: Icons.admin_panel_settings_outlined,
           eyebrow: 'Device admin',
           value:
-              'Android will ask to make SerenSync a device admin. Allow it, '
-              'or the lock does not start.',
+              'Android will ask for it. Allow it, or the lock does not '
+              'start.',
         ),
       (
         icon: Icons.health_and_safety_outlined,
         eyebrow: 'Emergency exit',
         value: _emergencyUsed
             ? 'Means retyping $emergencyTextLength random characters.'
-            : 'Works once, after three questions. Afterwards it means '
-                  'retyping $emergencyTextLength random characters.',
+            : 'Once, after three questions. Then it means retyping '
+                  '$emergencyTextLength random characters.',
       ),
     ];
   }
@@ -680,47 +663,8 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
               children: [
                 const _Eyebrow('Strict mode is on'),
                 _activeDial(strict, now, l10n, pending: pending, ready: ready),
-                const SizedBox(height: 24),
-                const Text(
-                  'Your blocks are locked. They can be tightened, never '
-                  'loosened.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.4,
-                    color: BlockingColors.textMuted,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                const _Eyebrow('To unlock', centred: false),
-                const SizedBox(height: 10),
-                _Card(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Column(
-                    children: [
-                      for (final (index, row) in _unlockRows(
-                        strict,
-                        now,
-                        l10n,
-                        pending: pending,
-                        ready: ready,
-                      ).indexed) ...[
-                        if (index > 0) const _RowDivider(),
-                        _StatusRow(row),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
                 const _Eyebrow('Side doors', centred: false),
-                const SizedBox(height: 4),
-                const Text(
-                  'Locks can be added while strict mode runs, never removed.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: BlockingColors.textMuted,
-                  ),
-                ),
                 const SizedBox(height: 10),
                 for (final lock in StrictLock.values)
                   if (strict.locks.contains(lock))
@@ -731,44 +675,15 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
                       on: false,
                       onChanged: (_) => unawaited(_addLock(strict, lock)),
                     ),
-                const SizedBox(height: 14),
-                const Divider(color: Colors.white12),
-                const SizedBox(height: 12),
-                Text(
-                  _emergencyUsed
-                      ? 'For real emergencies. You will retype '
-                            '$emergencyTextLength random characters.'
-                      : 'For real emergencies. Three questions, once; afterwards '
-                            'you retype $emergencyTextLength random characters.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    height: 1.4,
-                    color: BlockingColors.textMuted,
-                  ),
-                ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 8),
                 TextButton(
                   key: const ValueKey('strict-emergency'),
                   onPressed: () => unawaited(_emergency()),
                   style: TextButton.styleFrom(
                     foregroundColor: BlockingColors.textMuted,
                     minimumSize: const Size(0, 48),
-                    textStyle: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
                   ),
                   child: const Text('Emergency unlock'),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  _caveat,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: BlockingColors.textMuted,
-                  ),
                 ),
               ],
             ),
@@ -783,46 +698,23 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
                   iconColor: BlockingColors.rising,
                   message: message,
                 ),
-              if (!strict.timed) ...[
-                if (!pending && !ready)
-                  Text(
-                    'Starts a ${_lengthLabel(strict.cooldown!)} wait, then '
-                    'asks for your PIN.',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: BlockingColors.textMuted,
-                    ),
+              if (!strict.timed && pending)
+                OutlinedButton(
+                  key: const ValueKey('strict-cancel-unlock'),
+                  onPressed: () =>
+                      unawaited(_write(strict.withUnlockRequest(null))),
+                  child: const Text('Cancel request'),
+                )
+              else if (!strict.timed)
+                OutlinedButton(
+                  key: const ValueKey('strict-unlock'),
+                  onPressed: () => unawaited(
+                    ready
+                        ? _unlock(strict)
+                        : _write(strict.withUnlockRequest(now)),
                   ),
-                if (pending)
-                  OutlinedButton(
-                    key: const ValueKey('strict-cancel-unlock'),
-                    onPressed: () =>
-                        unawaited(_write(strict.withUnlockRequest(null))),
-                    style: _secondaryStyle,
-                    child: const Text('Cancel request'),
-                  )
-                else
-                  OutlinedButton(
-                    key: const ValueKey('strict-unlock'),
-                    onPressed: () => unawaited(
-                      ready
-                          ? _unlock(strict)
-                          : _write(strict.withUnlockRequest(now)),
-                    ),
-                    style: _secondaryStyle,
-                    child: Text(ready ? 'Unlock' : 'Request unlock'),
-                  ),
-                if (pending)
-                  const Text(
-                    'Cancelling keeps strict mode on and forgets the request.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: BlockingColors.textMuted,
-                    ),
-                  ),
-              ],
+                  child: Text(ready ? 'Unlock' : 'Request unlock'),
+                ),
             ],
           ),
       ],
@@ -871,6 +763,7 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
         ),
       );
     }
+    final cooldown = strict.cooldown;
     return _Dial(
       size: 240,
       fraction: 1,
@@ -879,71 +772,13 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
       child: _GlyphCenter(
         label: ready && strict.unlockRequestedAt != null
             ? 'Unlock is open'
-            : 'Locked',
+            : cooldown == null
+            ? 'Until the PIN'
+            : 'PIN after a ${_lengthLabel(cooldown)} wait',
         size: const Size(40, 46),
         labelSize: 15,
       ),
     );
-  }
-
-  List<_StatusRowData> _unlockRows(
-    StrictMode strict,
-    DateTime now,
-    MaterialLocalizations l10n, {
-    required bool pending,
-    required bool ready,
-  }) {
-    final remaining = cooldownRemaining(strict, now);
-    if (strict.timed) {
-      final until = strict.until!;
-      return [
-        (
-          icon: Icons.timer_outlined,
-          title: 'Ends in ${_remainingLabel(until.difference(now))}',
-          subtitle:
-              '${_untilLabel(until, now, l10n)}. Nothing ends it earlier.',
-          trailing: Icons.schedule,
-          done: false,
-        ),
-      ];
-    }
-    return [
-      (
-        icon: Icons.key_outlined,
-        title: 'Enter your PIN',
-        subtitle: ready
-            ? 'Tap Unlock below.'
-            : pending
-            ? 'Once the cooldown is over.'
-            : 'Tap Request unlock below, then wait.',
-        trailing: Icons.radio_button_unchecked,
-        done: false,
-      ),
-      if (remaining != null)
-        strict.unlockRequestedAt == null
-            ? (
-                icon: Icons.hourglass_empty,
-                title: 'Unlocking waits ${_lengthLabel(strict.cooldown!)}',
-                subtitle: 'You can cancel the request while it waits.',
-                trailing: Icons.hourglass_empty,
-                done: false,
-              )
-            : remaining > Duration.zero
-            ? (
-                icon: Icons.hourglass_top,
-                title: 'Cooldown running',
-                subtitle: 'Cancel below to forget the request.',
-                trailing: Icons.schedule,
-                done: false,
-              )
-            : (
-                icon: Icons.check_circle_outline,
-                title: 'Cooldown served',
-                subtitle: 'Unlock is open.',
-                trailing: Icons.check_circle,
-                done: true,
-              ),
-    ];
   }
 
   Widget _ended(StrictMode strict) {
@@ -993,26 +828,6 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
                       color: BlockingColors.textMuted,
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Your blocks are back to normal. Anything you tightened stays '
-                    'tightened.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 15,
-                      height: 1.45,
-                      color: BlockingColors.textMuted,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Too easy? Pick a longer timer or a PIN next time.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: BlockingColors.textMuted,
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -1023,7 +838,6 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
             FilledButton(
               key: const ValueKey('strict-done'),
               onPressed: () => unawaited(_write(null)),
-              style: _primaryStyle,
               child: const Text('Done'),
             ),
           ],
@@ -1034,14 +848,6 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
 }
 
 typedef _Fact = ({IconData icon, String eyebrow, String value});
-
-typedef _StatusRowData = ({
-  IconData icon,
-  String title,
-  String subtitle,
-  IconData trailing,
-  bool done,
-});
 
 String _lockTitle(StrictLock lock) {
   return switch (lock) {
@@ -1063,11 +869,10 @@ IconData _lockIcon(StrictLock lock) {
 
 String _lockDetail(StrictLock lock) {
   return switch (lock) {
-    StrictLock.settings => 'The Settings app shows the block screen.',
+    StrictLock.settings => 'The Settings app is blocked.',
     StrictLock.uninstall =>
-      'Android refuses to remove SerenSync. Needs SerenSync as a device '
-          'admin.',
-    StrictLock.recents => 'The recent apps screen shows the block screen.',
+      'SerenSync cannot be uninstalled. Needs device admin.',
+    StrictLock.recents => 'The recent apps screen is blocked.',
     StrictLock.newApps => 'Apps installed from now on are blocked.',
   };
 }
@@ -1136,27 +941,9 @@ Duration _duration(BuildContext context, int milliseconds) {
       : Duration(milliseconds: milliseconds);
 }
 
-final _primaryStyle = FilledButton.styleFrom(
-  backgroundColor: BlockingColors.accent,
-  foregroundColor: BlockingColors.onAccent,
-  disabledBackgroundColor: BlockingColors.surfaceRaised,
-  disabledForegroundColor: Colors.white38,
-  shape: const StadiumBorder(),
-  padding: const EdgeInsets.symmetric(vertical: 16),
-  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-);
-
-final _secondaryStyle = OutlinedButton.styleFrom(
-  foregroundColor: Colors.white,
-  side: const BorderSide(color: BlockingColors.outline),
-  shape: const StadiumBorder(),
-  padding: const EdgeInsets.symmetric(vertical: 16),
-  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-);
-
-const _sheetShape = RoundedRectangleBorder(
-  borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-  side: BorderSide(color: BlockingColors.outline),
+/// Dialog actions sit in a row, so they are smaller than the page buttons.
+final _dialogAction = FilledButton.styleFrom(
+  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
 );
 
 class _Progress extends StatelessWidget {
@@ -1197,7 +984,7 @@ class _Progress extends StatelessWidget {
 class _StepPage extends StatelessWidget {
   const _StepPage({
     required this.title,
-    required this.body,
+    this.body,
     required this.children,
     required this.primaryLabel,
     required this.onPrimary,
@@ -1207,7 +994,7 @@ class _StepPage extends StatelessWidget {
   });
 
   final String title;
-  final String body;
+  final String? body;
   final List<Widget> children;
   final String primaryLabel;
   final VoidCallback? onPrimary;
@@ -1236,15 +1023,17 @@ class _StepPage extends StatelessWidget {
                       letterSpacing: -0.6,
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    body,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      height: 1.4,
-                      color: BlockingColors.textMuted,
+                  if (body case final body?) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      body,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        height: 1.4,
+                        color: BlockingColors.textMuted,
+                      ),
                     ),
-                  ),
+                  ],
                   const SizedBox(height: 16),
                   ...children,
                 ],
@@ -1259,7 +1048,6 @@ class _StepPage extends StatelessWidget {
           FilledButton(
             key: primaryKey,
             onPressed: onPrimary,
-            style: _primaryStyle,
             child: Text(primaryLabel),
           ),
           if (onBack != null)
@@ -1418,9 +1206,7 @@ class _OptionCard extends StatelessWidget {
         color: BlockingColors.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
-          side: BorderSide(
-            color: selected ? BlockingColors.accent : BlockingColors.outline,
-          ),
+          side: const BorderSide(color: BlockingColors.outline),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -1496,9 +1282,7 @@ class _ToggleCard extends StatelessWidget {
         color: BlockingColors.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
-          side: BorderSide(
-            color: value ? BlockingColors.accent : BlockingColors.outline,
-          ),
+          side: const BorderSide(color: BlockingColors.outline),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -2024,7 +1808,6 @@ class _PinSheetState extends State<_PinSheet> {
             onPressed: _digits.length >= 4
                 ? () => Navigator.of(context).pop(_digits)
                 : null,
-            style: _primaryStyle,
             child: const Text('Unlock'),
           ),
           TextButton(
@@ -2257,22 +2040,9 @@ class _Eyebrow extends StatelessWidget {
       child: Text(
         text,
         textAlign: centred ? TextAlign.center : TextAlign.start,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-          color: BlockingColors.textMuted,
-        ),
+        style: sectionLabel,
       ),
     );
-  }
-}
-
-class _RowDivider extends StatelessWidget {
-  const _RowDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Divider(height: 1, color: Colors.white12, indent: 48);
   }
 }
 
@@ -2312,53 +2082,6 @@ class _StickyBar extends StatelessWidget {
           spacing: 8,
           children: children,
         ),
-      ),
-    );
-  }
-}
-
-class _StatusRow extends StatelessWidget {
-  const _StatusRow(this.row);
-
-  final _StatusRowData row;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-      child: Row(
-        children: [
-          Icon(row.icon, size: 20, color: BlockingColors.accent),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  row.title,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  row.subtitle,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: BlockingColors.textMuted,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Icon(
-            row.trailing,
-            size: 18,
-            color: row.done ? BlockingColors.accent : BlockingColors.textMuted,
-          ),
-        ],
       ),
     );
   }
@@ -2413,12 +2136,6 @@ class _FactRow extends StatelessWidget {
   }
 }
 
-final _dialogShape = RoundedRectangleBorder(
-  borderRadius: BorderRadius.circular(20),
-  side: const BorderSide(color: BlockingColors.outline),
-);
-const _dialogTitle = TextStyle(fontSize: 20, fontWeight: FontWeight.w700);
-
 const _emergencySteps = <({String question, String proceed, String stay})>[
   (
     question: 'Is this a real emergency, or an urge that will pass?',
@@ -2447,15 +2164,9 @@ class _ConfirmLock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: BlockingColors.surface,
-      shape: _dialogShape,
-      title: Text(
-        'Turn on ${_lockTitle(lock).toLowerCase()}?',
-        style: _dialogTitle,
-      ),
+      title: Text('Turn on ${_lockTitle(lock).toLowerCase()}?'),
       content: Text(
         '${_lockDetail(lock)}\n\nThis cannot be undone until strict mode ends.',
-        style: const TextStyle(fontSize: 15, height: 1.45),
       ),
       actions: [
         TextButton(
@@ -2469,14 +2180,7 @@ class _ConfirmLock extends StatelessWidget {
         FilledButton(
           key: const ValueKey('strict-lock-confirm'),
           onPressed: () => Navigator.of(context).pop(true),
-          style: _primaryStyle.copyWith(
-            padding: const WidgetStatePropertyAll(
-              EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            ),
-            textStyle: const WidgetStatePropertyAll(
-              TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-            ),
-          ),
+          style: _dialogAction,
           child: const Text('Turn on'),
         ),
       ],
@@ -2498,14 +2202,9 @@ class _EmergencyQuestionsState extends State<_EmergencyQuestions> {
   Widget build(BuildContext context) {
     final step = _emergencySteps[_step];
     return AlertDialog(
-      backgroundColor: BlockingColors.surface,
-      shape: _dialogShape,
       actionsAlignment: MainAxisAlignment.spaceBetween,
       actionsPadding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
-      title: Text(
-        'Emergency ${_step + 1} of ${_emergencySteps.length}',
-        style: _dialogTitle,
-      ),
+      title: Text('Emergency ${_step + 1} of ${_emergencySteps.length}'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2563,24 +2262,13 @@ class _EmergencyQuestionsState extends State<_EmergencyQuestions> {
           style: TextButton.styleFrom(
             foregroundColor: BlockingColors.textMuted,
             minimumSize: const Size(0, 48),
-            textStyle: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
           ),
           child: Text(step.proceed),
         ),
         FilledButton(
           key: const ValueKey('strict-emergency-stay'),
           onPressed: () => Navigator.of(context).pop(false),
-          style: _primaryStyle.copyWith(
-            padding: const WidgetStatePropertyAll(
-              EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            ),
-            textStyle: const WidgetStatePropertyAll(
-              TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-            ),
-          ),
+          style: _dialogAction,
           child: Text(step.stay),
         ),
       ],
@@ -2624,11 +2312,9 @@ class _RetypeDialogState extends State<_RetypeDialog> {
     final matches = typed == widget.text;
     const mono = TextStyle(fontFamily: 'monospace', fontSize: 13);
     return AlertDialog(
-      backgroundColor: BlockingColors.surface,
-      shape: _dialogShape,
       insetPadding: const EdgeInsets.all(20),
       scrollable: true,
-      title: const Text('Retype to unlock', style: _dialogTitle),
+      title: const Text('Retype to unlock'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -2722,7 +2408,6 @@ class _RetypeDialogState extends State<_RetypeDialog> {
         TextButton(
           key: const ValueKey('strict-retype-submit'),
           onPressed: matches ? () => Navigator.of(context).pop(true) : null,
-          style: TextButton.styleFrom(foregroundColor: BlockingColors.accent),
           child: const Text('Unlock'),
         ),
       ],

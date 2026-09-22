@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../apps/app_service.dart';
+import '../../../theme.dart';
 import '../blocking_colors.dart';
 import '../blocking_engine.dart';
 import '../rule.dart';
@@ -29,7 +30,7 @@ class RuleList extends StatefulWidget {
 
 class _RuleListState extends State<RuleList> {
   List<BlockRule>? _rules;
-  Object? _loadError;
+  bool _loadFailed = false;
 
   @override
   void initState() {
@@ -38,17 +39,14 @@ class _RuleListState extends State<RuleList> {
   }
 
   Future<void> _loadRules() async {
-    if (_loadError != null) setState(() => _loadError = null);
+    if (_loadFailed) setState(() => _loadFailed = false);
     try {
       final rules = await widget.ruleStore.readAll();
       if (!mounted) return;
-      setState(() {
-        _rules = rules;
-        _loadError = null;
-      });
-    } catch (error) {
+      setState(() => _rules = rules);
+    } catch (_) {
       if (!mounted) return;
-      setState(() => _loadError = error);
+      setState(() => _loadFailed = true);
     }
   }
 
@@ -125,41 +123,21 @@ class _RuleListState extends State<RuleList> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loadError != null && _rules == null) {
+    if (_loadFailed && _rules == null) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Could not load your limits.'),
-            const SizedBox(height: 4),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Text(
-                '$_loadError',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: BlockingColors.textMuted,
-                ),
-              ),
-            ),
+            const Text('Could not load your blocks.'),
             const SizedBox(height: 8),
-            TextButton(
-              style: TextButton.styleFrom(
-                foregroundColor: BlockingColors.accent,
-              ),
-              onPressed: _loadRules,
-              child: const Text('Retry'),
-            ),
+            TextButton(onPressed: _loadRules, child: const Text('Retry')),
           ],
         ),
       );
     }
     final rules = _rules;
     if (rules == null) {
-      return const Center(
-        child: CircularProgressIndicator(color: BlockingColors.accent),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     final active = [
@@ -194,10 +172,10 @@ class _RuleListState extends State<RuleList> {
           ),
         if (rules.isEmpty)
           const Padding(
-            padding: EdgeInsets.only(top: 24),
+            padding: EdgeInsets.fromLTRB(4, 24, 4, 0),
             child: Text(
-              'No limits yet',
-              style: TextStyle(color: Colors.white70),
+              'No blocks yet.',
+              style: TextStyle(color: BlockingColors.textMuted),
             ),
           ),
         if (active.isNotEmpty) ...[
@@ -240,7 +218,6 @@ class _CreateBlockButton extends StatelessWidget {
         style: OutlinedButton.styleFrom(
           foregroundColor: BlockingColors.accent,
           side: const BorderSide(color: BlockingColors.accent),
-          shape: const StadiumBorder(),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         ),
         icon: const Icon(Icons.add),
@@ -259,14 +236,7 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 24, 4, 8),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-          color: BlockingColors.textMuted,
-        ),
-      ),
+      child: Text(title, style: sectionLabel),
     );
   }
 }
@@ -378,11 +348,6 @@ class _BlockMenu extends StatelessWidget {
       tooltip: 'Options for ${rule.name}',
       icon: const Icon(Icons.more_vert, color: BlockingColors.textMuted),
       position: PopupMenuPosition.under,
-      color: BlockingColors.surfaceRaised,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: BlockingColors.outline),
-      ),
       onSelected: onSelected,
       itemBuilder: (_) => [
         _item(_BlockAction.edit, Icons.edit_outlined, 'Edit'),

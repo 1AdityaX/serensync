@@ -256,9 +256,8 @@ _PermissionCopy _copy(RequiredPermission permission) {
     RequiredPermission.accessibility => (
       scene: PhoneScene.browser,
       why:
-          'Reads the address bar in supported browsers so websites and '
-          'keywords can be blocked, and lets strict mode shut Settings and '
-          'installers the instant they open. Optional for app blocks alone.',
+          'Blocks websites and keywords in the browser, and lets strict mode '
+          'shut Settings the instant it opens. Not needed for app blocks.',
       how:
           'Under Downloaded apps, choose SerenSync and switch it on. If the '
           'switch is greyed out, open App info, tap the menu and allow '
@@ -378,16 +377,6 @@ class _Page extends StatelessWidget {
           FilledButton(
             key: const ValueKey('onboarding-primary'),
             onPressed: primary.$2,
-            style: FilledButton.styleFrom(
-              backgroundColor: BlockingColors.accent,
-              foregroundColor: BlockingColors.onAccent,
-              shape: const StadiumBorder(),
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              textStyle: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
             child: Text(primary.$1),
           ),
           SizedBox(

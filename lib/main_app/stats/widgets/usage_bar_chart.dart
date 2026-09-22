@@ -181,15 +181,7 @@ class _Callout extends StatelessWidget {
     return SizedBox(
       height: 30,
       child: label == null
-          ? const Center(
-              child: Text(
-                'Tap the chart to inspect',
-                style: TextStyle(
-                  fontSize: 11.5,
-                  color: BlockingColors.textMuted,
-                ),
-              ),
-            )
+          ? null
           : AnimatedAlign(
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOutCubic,

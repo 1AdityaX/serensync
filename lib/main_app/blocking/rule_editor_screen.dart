@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../apps/app_service.dart';
 import '../../apps/installed_app.dart';
+import '../../theme.dart';
 import '../strict/strict_mode.dart';
 import 'blocking_colors.dart';
 import 'blocking_engine.dart';
@@ -215,7 +216,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
   IconData get _conditionIcon => switch (_trigger) {
     Schedule() => Icons.schedule,
     UsageQuota() => Icons.hourglass_bottom,
-    LaunchQuota() => Icons.open_in_new,
+    LaunchQuota() => Icons.repeat,
   };
 
   (String, String) get _conditionSummary => switch (_trigger) {
@@ -232,16 +233,13 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
       weekdaySummary(schedule.weekdays),
     ),
     final UsageQuota quota => (
-      '${ruleDuration(quota.limit)} / day',
-      'All day long',
+      '${ruleDuration(quota.limit)} a day',
+      'Shared by every app in this block',
     ),
-    final LaunchQuota quota => ('${quota.limit}× / day', 'All day long'),
-  };
-
-  String? get _conditionNote => switch (_trigger) {
-    UsageQuota() => 'The usage limit is shared by all selected apps.',
-    LaunchQuota() => 'App launches are counted across all selected apps.',
-    Schedule() => null,
+    final LaunchQuota quota => (
+      '${quota.limit} opens a day',
+      'Counted across every app in this block',
+    ),
   };
 
   @override
@@ -249,39 +247,33 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
     // Comparing schedules walks a whole week, so it happens once per build.
     final loosens = _loosens;
     return Scaffold(
-      backgroundColor: BlockingColors.background,
       appBar: AppBar(
-        backgroundColor: BlockingColors.background,
-        centerTitle: true,
-        title: Text(widget.rule == null ? 'New schedule' : 'Edit schedule'),
+        title: Text(widget.rule == null ? 'New block' : 'Edit block'),
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         children: [
           _nameField(),
-          const SizedBox(height: 30),
+          const SizedBox(height: 28),
           _conditionSection(),
-          const SizedBox(height: 30),
-          const Divider(color: Colors.white12),
-          const SizedBox(height: 24),
-          _blockingSection(),
+          const SizedBox(height: 28),
+          _targetsSection(),
           if (widget.locked && widget.rule != null) ...[
             const SizedBox(height: 20),
             Note(
               key: const ValueKey('rule-locked'),
               icon: Icons.shield,
               message: loosens
-                  ? 'Strict mode is on. This change would loosen the block, '
-                        'so it cannot be saved.'
-                  : 'Strict mode is on. You can add to this block or tighten '
-                        'it, but not loosen it.',
+                  ? 'This change would loosen the block. Strict mode is on.'
+                  : 'Strict mode is on. This block can be tightened, not '
+                        'loosened.',
             ),
           ],
           if (_saveError) ...[
             const SizedBox(height: 20),
             const Note(
               icon: Icons.error_outline,
-              message: 'Could not save this schedule. Try again.',
+              message: 'Could not save. Try again.',
             ),
           ],
         ],
@@ -296,11 +288,10 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
     return TextField(
       key: const ValueKey('rule-name'),
       controller: _nameController,
-      cursorColor: BlockingColors.accent,
       textCapitalization: TextCapitalization.sentences,
       style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
       decoration: InputDecoration(
-        hintText: _derivedName.isEmpty ? 'Schedule name' : _derivedName,
+        hintText: _derivedName.isEmpty ? 'Name' : _derivedName,
         filled: true,
         fillColor: BlockingColors.surface,
         contentPadding: const EdgeInsets.symmetric(
@@ -326,25 +317,19 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
       children: [
         Row(
           children: [
-            const Expanded(
-              child: Text(
-                'Condition',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-              ),
-            ),
+            const Expanded(child: Text('When', style: sectionLabel)),
             DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 key: const ValueKey('trigger-type'),
                 value: _triggerType,
-                dropdownColor: BlockingColors.surfaceRaised,
                 borderRadius: BorderRadius.circular(14),
                 icon: const Icon(
                   Icons.keyboard_arrow_down,
-                  color: Colors.white70,
+                  color: BlockingColors.textMuted,
                 ),
-                style: const TextStyle(
+                style: Theme.of(context).textTheme.bodyLarge!.copyWith(
                   color: BlockingColors.accent,
-                  fontSize: 17,
+                  fontSize: 15,
                   fontWeight: FontWeight.w600,
                 ),
                 items: const [
@@ -360,7 +345,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
             ),
           ],
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 8),
         Material(
           color: BlockingColors.surface,
           borderRadius: BorderRadius.circular(20),
@@ -369,19 +354,23 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
             key: const ValueKey('condition-summary'),
             onTap: _editCondition,
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(18),
               child: Row(
                 children: [
                   Container(
-                    width: 48,
-                    height: 48,
-                    decoration: const BoxDecoration(
-                      color: BlockingColors.accent,
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: BlockingColors.accent.withValues(alpha: 0.12),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(_conditionIcon, color: BlockingColors.onAccent),
+                    child: Icon(
+                      _conditionIcon,
+                      size: 20,
+                      color: BlockingColors.accent,
+                    ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -389,7 +378,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
                         Text(
                           primary,
                           style: const TextStyle(
-                            fontSize: 18,
+                            fontSize: 17,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -397,41 +386,32 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
                         Text(
                           secondary,
                           style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 15,
+                            color: BlockingColors.textMuted,
+                            fontSize: 13.5,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right, color: Colors.white54),
+                  const Icon(
+                    Icons.chevron_right,
+                    color: BlockingColors.textMuted,
+                  ),
                 ],
               ),
             ),
           ),
         ),
-        if (_conditionNote case final note?) ...[
-          const SizedBox(height: 14),
-          Note(message: note),
-        ],
       ],
     );
   }
 
-  Widget _blockingSection() {
+  Widget _targetsSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Blocking',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 6),
-        const Text(
-          'Select the apps, websites, and keywords this schedule blocks.',
-          style: TextStyle(color: Colors.white60, fontSize: 15),
-        ),
-        const SizedBox(height: 16),
+        const Text('What to block', style: sectionLabel),
+        const SizedBox(height: 8),
         FutureBuilder<List<InstalledApp>>(
           future: _appsLoad,
           builder: (context, snapshot) {
@@ -454,14 +434,14 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
             return const _AppsLoading();
           },
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         _TargetTile(
           key: const ValueKey('websites-summary'),
           title: 'Websites',
           count: _websites.length,
           onTap: _editWebsites,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         _TargetTile(
           key: const ValueKey('keywords-summary'),
           title: 'Keywords',
@@ -476,9 +456,6 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
                 'and block websites and keywords.',
             action: TextButton(
               key: const ValueKey('allow-accessibility'),
-              style: TextButton.styleFrom(
-                foregroundColor: BlockingColors.accent,
-              ),
               onPressed: _requestAccessibility,
               child: const Text('Allow'),
             ),
@@ -499,24 +476,11 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
   Widget _bottomAction(bool disabled) {
     return SafeArea(
       top: false,
-      child: Container(
-        color: BlockingColors.background,
+      child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
         child: FilledButton(
           key: const ValueKey('rule-save'),
           onPressed: disabled ? null : _save,
-          style: FilledButton.styleFrom(
-            minimumSize: const Size.fromHeight(58),
-            backgroundColor: BlockingColors.accent,
-            foregroundColor: BlockingColors.onAccent,
-            disabledBackgroundColor: BlockingColors.surfaceRaised,
-            disabledForegroundColor: Colors.white38,
-            shape: const StadiumBorder(),
-            textStyle: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
           child: _saving
               ? const SizedBox(
                   width: 22,
@@ -526,7 +490,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
                     color: BlockingColors.onAccent,
                   ),
                 )
-              : Text(widget.rule == null ? 'Create' : 'Save changes'),
+              : Text(widget.rule == null ? 'Create' : 'Save'),
         ),
       ),
     );
@@ -559,21 +523,24 @@ class _TargetTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(20),
       clipBehavior: Clip.antiAlias,
       child: ListTile(
-        minTileHeight: 84,
+        minTileHeight: 72,
         contentPadding: const EdgeInsets.symmetric(horizontal: 20),
         title: Text(
           title,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              '$count',
-              style: const TextStyle(color: Colors.white54, fontSize: 16),
+              count == 0 ? 'None' : '$count',
+              style: const TextStyle(
+                color: BlockingColors.textMuted,
+                fontSize: 15,
+              ),
             ),
-            const SizedBox(width: 8),
-            const Icon(Icons.chevron_right, color: Colors.white54),
+            const SizedBox(width: 6),
+            const Icon(Icons.chevron_right, color: BlockingColors.textMuted),
           ],
         ),
         onTap: onTap,
@@ -588,7 +555,7 @@ class _AppsLoading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 84,
+      height: 72,
       padding: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
         color: BlockingColors.surface,
@@ -600,10 +567,7 @@ class _AppsLoading extends StatelessWidget {
           SizedBox(
             width: 18,
             height: 18,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: BlockingColors.accent,
-            ),
+            child: CircularProgressIndicator(strokeWidth: 2),
           ),
         ],
       ),

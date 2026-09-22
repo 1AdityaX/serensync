@@ -135,7 +135,7 @@ void main() {
     expect(blockingService.syncs, 1);
     expect(changes, 1);
     expect(find.text('Strict mode is on'), findsOneWidget);
-    expect(find.text('Ends in 3h'), findsOneWidget);
+    expect(find.text('3h'), findsOneWidget);
     expect(find.byKey(const ValueKey('strict-unlock')), findsNothing);
   });
 
@@ -339,13 +339,14 @@ void main() {
   testWidgets('unlocking needs the right pin', (tester) async {
     store.strict = strict(locks: {StrictLock.recents});
     await pump(tester);
-    expect(find.text('Enter your PIN'), findsOneWidget);
-    expect(find.text('Tap Unlock below.'), findsOneWidget);
+    expect(find.text('Until the PIN'), findsOneWidget);
+    expect(find.text('Unlock'), findsOneWidget);
     expect(lockSwitch(tester, StrictLock.recents).onChanged, isNull);
     expect(find.textContaining('Kept on by'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('strict-unlock')));
     await tester.pumpAndSettle();
+    expect(find.text('Enter your PIN'), findsOneWidget);
     await typePin(tester, '0000');
     await tester.tap(find.byKey(const ValueKey('strict-pin-submit')));
     await tester.pumpAndSettle();
@@ -368,13 +369,12 @@ void main() {
     store.strict = strict(cooldown: const Duration(minutes: 10));
     await pump(tester);
     expect(find.text('Request unlock'), findsOneWidget);
-    expect(find.text('Tap Request unlock below, then wait.'), findsOneWidget);
+    expect(find.text('PIN after a 10 min wait'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('strict-unlock')));
     await tester.pump();
     expect(store.strict!.unlockRequestedAt, isNotNull);
     expect(find.textContaining('Unlock opens in'), findsOneWidget);
-    expect(find.text('Once the cooldown is over.'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('strict-cancel-unlock')));
     await tester.pump();

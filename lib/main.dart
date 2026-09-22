@@ -15,6 +15,7 @@ import 'main_app/onboarding/onboarding_screen.dart';
 import 'main_app/onboarding/onboarding_store.dart';
 import 'main_app/pomodoro/pomodoro_store.dart';
 import 'main_app/strict/strict_mode_store.dart';
+import 'theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -61,22 +62,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: Colors.black,
-        appBarTheme: const AppBarTheme(
-          surfaceTintColor: Colors.black,
-          backgroundColor: Colors.black,
-        ),
-        navigationBarTheme: const NavigationBarThemeData(
-          backgroundColor: Colors.black,
-        ),
-        listTileTheme: const ListTileThemeData(
-          iconColor: Colors.white,
-          tileColor: Colors.black,
-          titleTextStyle: TextStyle(color: Colors.white, fontSize: 20),
-        ),
-        dialogTheme: const DialogThemeData(backgroundColor: Colors.black),
-      ),
+      theme: appTheme,
       home: MainScreen(
         appService: appService,
         launcherController: launcherController,

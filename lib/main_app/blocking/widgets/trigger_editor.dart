@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../blocking_colors.dart';
 import '../rule.dart';
+import 'note.dart';
 
 class ConditionEditorScreen extends StatefulWidget {
   final Trigger trigger;
@@ -23,7 +24,7 @@ class _ConditionEditorScreenState extends State<ConditionEditorScreen> {
   }
 
   String get _title => switch (_trigger) {
-    Schedule() => 'Active time',
+    Schedule() => 'Time',
     UsageQuota() => 'Usage limit',
     LaunchQuota() => 'Launch count',
   };
@@ -31,14 +32,9 @@ class _ConditionEditorScreenState extends State<ConditionEditorScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: BlockingColors.background,
-      appBar: AppBar(
-        centerTitle: true,
-        backgroundColor: BlockingColors.background,
-        title: Text(_title),
-      ),
+      appBar: AppBar(title: Text(_title)),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         child: TriggerEditor(
           trigger: _trigger,
           onChanged: (trigger) => setState(() => _trigger = trigger),
@@ -46,23 +42,12 @@ class _ConditionEditorScreenState extends State<ConditionEditorScreen> {
       ),
       bottomNavigationBar: SafeArea(
         top: false,
-        child: Container(
-          color: BlockingColors.background,
+        child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
           child: FilledButton(
             key: const ValueKey('condition-done'),
             onPressed: () => Navigator.of(context).pop(_trigger),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(58),
-              backgroundColor: BlockingColors.accent,
-              foregroundColor: BlockingColors.onAccent,
-              shape: const StadiumBorder(),
-              textStyle: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            child: const Text('Continue'),
+            child: const Text('Done'),
           ),
         ),
       ),
@@ -99,48 +84,22 @@ class TriggerEditor extends StatelessWidget {
         schedule: schedule,
         onChanged: onChanged,
       ),
-      final UsageQuota quota => _usageEditor(quota),
-      final LaunchQuota quota => _launchEditor(quota),
+      final UsageQuota quota => _NumberLimitCard(
+        fieldKey: 'usage-minutes',
+        value: quota.limit.inMinutes,
+        step: 5,
+        unit: 'minutes a day',
+        onChanged: (minutes) =>
+            onChanged(UsageQuota(Duration(minutes: minutes))),
+      ),
+      final LaunchQuota quota => _NumberLimitCard(
+        fieldKey: 'launch-count',
+        value: quota.limit,
+        step: 1,
+        unit: 'opens a day',
+        onChanged: (count) => onChanged(LaunchQuota(count)),
+      ),
     };
-  }
-
-  Widget _usageEditor(UsageQuota quota) {
-    return Column(
-      children: [
-        _NumberLimitCard(
-          fieldKey: 'usage-minutes',
-          value: quota.limit.inMinutes,
-          step: 5,
-          unit: 'minutes per day',
-          onChanged: (minutes) =>
-              onChanged(UsageQuota(Duration(minutes: minutes))),
-        ),
-        const SizedBox(height: 18),
-        const _DailyResetCard(),
-        const SizedBox(height: 18),
-        const _InfoMessage('The usage limit is shared by all selected apps.'),
-      ],
-    );
-  }
-
-  Widget _launchEditor(LaunchQuota quota) {
-    return Column(
-      children: [
-        _NumberLimitCard(
-          fieldKey: 'launch-count',
-          value: quota.limit,
-          step: 1,
-          unit: 'opens per day',
-          onChanged: (count) => onChanged(LaunchQuota(count)),
-        ),
-        const SizedBox(height: 18),
-        const _DailyResetCard(),
-        const SizedBox(height: 18),
-        const _InfoMessage(
-          'App launches are counted across all selected apps.',
-        ),
-      ],
-    );
   }
 }
 
@@ -207,7 +166,6 @@ class _NumberLimitCardState extends State<_NumberLimitCard> {
                 TextField(
                   key: ValueKey(widget.fieldKey),
                   controller: _controller,
-                  cursorColor: BlockingColors.accent,
                   textAlign: TextAlign.center,
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -228,7 +186,7 @@ class _NumberLimitCardState extends State<_NumberLimitCard> {
                 const SizedBox(height: 4),
                 Text(
                   widget.unit,
-                  style: const TextStyle(color: Colors.white54),
+                  style: const TextStyle(color: BlockingColors.textMuted),
                 ),
               ],
             ),
@@ -265,58 +223,6 @@ class _StepButton extends StatelessWidget {
         foregroundColor: BlockingColors.accent,
       ),
       icon: Icon(icon),
-    );
-  }
-}
-
-class _DailyResetCard extends StatelessWidget {
-  const _DailyResetCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: BlockingColors.surface,
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: const Row(
-        children: [
-          Text(
-            'Resets',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-          ),
-          Spacer(),
-          Text('Daily at midnight', style: TextStyle(color: Colors.white60)),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoMessage extends StatelessWidget {
-  final String message;
-
-  const _InfoMessage(this.message);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        border: Border.all(color: BlockingColors.outline),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.info_outline, color: BlockingColors.accent),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(message, style: const TextStyle(color: Colors.white70)),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -380,22 +286,21 @@ class _ScheduleEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasOvernightWindow = schedule.times.any(
-      (time) => time.endMinute < time.startMinute,
-    );
+    final overnight =
+        !schedule.allDay &&
+        schedule.times.any((time) => time.endMinute < time.startMinute);
     return Column(
       children: [
         _timeCard(),
         const SizedBox(height: 18),
         _daysCard(),
-        const SizedBox(height: 18),
-        _InfoMessage(
-          schedule.allDay
-              ? 'Apps are blocked all day on the selected days.'
-              : hasOvernightWindow
-              ? 'This schedule includes a window that ends the following day.'
-              : 'Apps are blocked only during these active times.',
-        ),
+        if (overnight) ...[
+          const SizedBox(height: 18),
+          const Note(
+            message:
+                'This schedule includes a window that ends the following day.',
+          ),
+        ],
       ],
     );
   }
@@ -414,21 +319,17 @@ class _ScheduleEditor extends StatelessWidget {
             children: [
               const Text(
                 'Times',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
               ),
               const Spacer(),
               const Text(
                 'All day',
-                style: TextStyle(color: Colors.white60, fontSize: 15),
+                style: TextStyle(color: BlockingColors.textMuted, fontSize: 14),
               ),
               const SizedBox(width: 8),
               Switch(
                 key: const ValueKey('schedule-all-day'),
                 value: schedule.allDay,
-                activeTrackColor: BlockingColors.accent,
-                activeThumbColor: BlockingColors.onAccent,
-                inactiveTrackColor: BlockingColors.surfaceRaised,
-                inactiveThumbColor: Colors.white70,
                 onChanged: (value) => _replaceSchedule(allDay: value),
               ),
             ],
@@ -436,7 +337,7 @@ class _ScheduleEditor extends StatelessWidget {
           if (!schedule.allDay) ...[
             const SizedBox(height: 16),
             for (var index = 0; index < schedule.times.length; index++) ...[
-              if (index > 0) const Divider(height: 28, color: Colors.white12),
+              if (index > 0) const Divider(height: 28),
               Row(
                 children: [
                   Expanded(child: _timeEditor(index: index, start: true)),
@@ -451,7 +352,10 @@ class _ScheduleEditor extends StatelessWidget {
                       key: ValueKey('schedule-remove-time-$index'),
                       tooltip: 'Remove time',
                       onPressed: () => _removeTime(index),
-                      icon: const Icon(Icons.close, color: Colors.white54),
+                      icon: const Icon(
+                        Icons.close,
+                        color: BlockingColors.textMuted,
+                      ),
                     ),
                   ],
                 ],
@@ -463,9 +367,6 @@ class _ScheduleEditor extends StatelessWidget {
               child: TextButton.icon(
                 key: const ValueKey('schedule-add-time'),
                 onPressed: _addTime,
-                style: TextButton.styleFrom(
-                  foregroundColor: BlockingColors.accent,
-                ),
                 icon: const Icon(Icons.add),
                 label: const Text('Add time'),
               ),
@@ -523,7 +424,6 @@ class _ScheduleEditor extends StatelessWidget {
     return TextFormField(
       key: ValueKey(key),
       initialValue: value.toString().padLeft(2, '0'),
-      cursorColor: BlockingColors.accent,
       textAlign: TextAlign.center,
       style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w600),
       decoration: const InputDecoration(
@@ -563,12 +463,15 @@ class _ScheduleEditor extends StatelessWidget {
             children: [
               const Text(
                 'Days',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
               ),
               const Spacer(),
               Text(
                 weekdaySummary(schedule.weekdays),
-                style: const TextStyle(color: Colors.white54),
+                style: const TextStyle(
+                  color: BlockingColors.textMuted,
+                  fontSize: 14,
+                ),
               ),
             ],
           ),

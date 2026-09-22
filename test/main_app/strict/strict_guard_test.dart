@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serensync/main_app/strict/strict_guard.dart';
 import 'package:serensync/main_app/strict/strict_mode.dart';
+import 'package:tamper_guard/tamper_guard.dart';
 
 void main() {
   final activatedAt = DateTime(2026, 9, 16, 9);
@@ -57,18 +58,17 @@ void main() {
     expect(label, deviceAdminLabel);
   });
 
-  test('admin guard rules only look for views inside their own packages', () {
-    for (final rule in adminGuardRules) {
-      expect(rule.packages, isNotEmpty);
-      expect(settingsPackages, containsAll(rule.packages));
-      if (rule.viewId case final viewId?) {
-        expect(rule.packages, contains(viewId.split(':id/').first));
-      }
-    }
-    expect(
-      adminGuardRules.map((rule) => rule.text),
-      contains(deviceAdminLabel),
-    );
+  test('the admin guard targets only the device-admin screen', () {
+    final rule = adminGuardRules.single;
+
+    expect(rule.packages, settingsPackages);
+    expect(rule.classNames, isEmpty);
+    expect(rule.classNameSuffixes, {'DeviceAdminAdd'});
+    expect(rule.viewId, isNull);
+    expect(rule.text, isNull);
+    expect(rule.action, GuardAction.home);
+    expect(rule.shield, adminGuardShield);
+    expect(adminGuardShield, greaterThan(Duration.zero));
   });
 
   test('locks combine', () {
