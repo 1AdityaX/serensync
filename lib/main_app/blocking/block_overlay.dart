@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:android_intent_plus/android_intent.dart';
+import 'package:android_intent_plus/flag.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
@@ -81,10 +83,16 @@ class BlockOverlay {
     }
   }
 
+  // The plugin centres the window and then nudges it up by the status bar
+  // height, which it wrongly treats as dp, so the bottom of the screen is
+  // left bare. Pinning the top-left corner at the origin with a height that
+  // overshoots the display covers everything.
   static Future<void> _show(String ruleName) {
     return FlutterOverlayWindow.showOverlay(
-      height: WindowSize.matchParent,
+      height: WindowSize.fullCover,
       width: WindowSize.matchParent,
+      alignment: OverlayAlignment.topLeft,
+      startPosition: const OverlayPosition(0, 0),
       flag: OverlayFlag.defaultFlag,
       overlayTitle: 'SerenSync',
       overlayContent: ruleName,
@@ -145,7 +153,11 @@ class _BlockScreenState extends State<_BlockScreen> {
   Future<void> _leave() async {
     await FlutterOverlayWindow.closeOverlay();
     if (_host.isEmpty) {
-      FlutterForegroundTask.launchApp();
+      await const AndroidIntent(
+        action: 'android.intent.action.MAIN',
+        category: 'android.intent.category.HOME',
+        flags: [Flag.FLAG_ACTIVITY_NEW_TASK],
+      ).launch();
     } else {
       await TamperGuard.performGlobalAction(GuardAction.back);
     }
@@ -153,11 +165,21 @@ class _BlockScreenState extends State<_BlockScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // The window is taller than the display, so centre on the visible part.
+    final view = View.of(context);
+    final overshoot =
+        (view.physicalSize.height - view.display.size.height) /
+        view.devicePixelRatio;
     return Material(
       color: BlockingColors.background,
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(32),
+          padding: EdgeInsets.fromLTRB(
+            32,
+            32,
+            32,
+            32 + overshoot.clamp(0, 400),
+          ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
