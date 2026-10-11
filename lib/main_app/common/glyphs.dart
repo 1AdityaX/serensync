@@ -19,7 +19,6 @@ enum Glyphs {
   search,
   moon,
   briefcase,
-  sprout,
   phone,
   camera,
   lock,
@@ -38,6 +37,7 @@ enum Glyphs {
   arrowDown,
   alert,
   swipe,
+  contrast,
 }
 
 /// Draws a [Glyphs] icon, sized and coloured by the surrounding [IconTheme]
@@ -246,18 +246,6 @@ void _draw(Glyphs glyph, Canvas c, Paint s, Paint f) {
         s,
       );
       _line(c, s, 3.5, 12.8, 20.5, 12.8);
-    case Glyphs.sprout:
-      _line(c, s, 12, 21, 12, 11);
-      c.drawPath(
-        Path()
-          ..moveTo(12, 13.5)
-          ..cubicTo(7.2, 13.5, 4.8, 10.6, 4.8, 6.6)
-          ..cubicTo(9.2, 6.6, 12, 9, 12, 13.5)
-          ..moveTo(12, 11)
-          ..cubicTo(12, 6.6, 14.8, 3.8, 19.2, 3.8)
-          ..cubicTo(19.2, 8.4, 16.4, 11, 12, 11),
-        s,
-      );
     case Glyphs.phone:
       c.drawPath(
         Path()
@@ -423,6 +411,18 @@ void _draw(Glyphs glyph, Canvas c, Paint s, Paint f) {
       _circle(c, s, 12, 12, 8.6);
       _line(c, s, 12, 7.6, 12, 12.8);
       _circle(c, f, 12, 16.2, 1.2);
+    case Glyphs.contrast:
+      _circle(c, s, 12, 12, 8.6);
+      c.drawPath(
+        Path()
+          ..moveTo(12, 3.4)
+          ..arcToPoint(
+            const Offset(12, 20.6),
+            radius: const Radius.circular(8.6),
+          )
+          ..close(),
+        f,
+      );
     case Glyphs.swipe:
       c.drawPath(
         Path()

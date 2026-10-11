@@ -824,7 +824,7 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
                   Text(
                     'You held it for ${_lengthLabel(held)}.',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       color: BlockingColors.textMuted,
                     ),
@@ -1027,7 +1027,7 @@ class _StepPage extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       body,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         height: 1.4,
                         color: BlockingColors.textMuted,
@@ -1079,7 +1079,7 @@ class _PlanLine extends StatelessWidget {
         text,
         key: ValueKey(text),
         textAlign: TextAlign.center,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 13,
           height: 1.4,
           color: BlockingColors.textMuted,
@@ -1238,7 +1238,7 @@ class _OptionCard extends StatelessWidget {
                     ),
                   ),
                   child: selected
-                      ? const Glyph(
+                      ? Glyph(
                           Glyphs.check,
                           size: 16,
                           color: BlockingColors.onAccent,
@@ -1310,7 +1310,7 @@ class _ToggleCard extends StatelessWidget {
                         )
                       : null,
                   thumbColor: locked
-                      ? const WidgetStatePropertyAll(BlockingColors.onAccent)
+                      ? WidgetStatePropertyAll(BlockingColors.onAccent)
                       : null,
                 ),
               ],
@@ -1340,7 +1340,7 @@ class _CardText extends StatelessWidget {
         const SizedBox(height: 3),
         Text(
           detail,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
             height: 1.35,
             color: BlockingColors.textMuted,
@@ -1567,7 +1567,7 @@ class _Wheel extends StatelessWidget {
         children: [
           Text(
             unit,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: BlockingColors.textMuted,
@@ -1924,7 +1924,7 @@ class _RingCenter extends StatelessWidget {
           const SizedBox(height: 4),
           _FitText(
             small,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
               color: BlockingColors.textMuted,
@@ -1933,10 +1933,7 @@ class _RingCenter extends StatelessWidget {
           if (footnote case final footnote?)
             _FitText(
               footnote,
-              style: const TextStyle(
-                fontSize: 12,
-                color: BlockingColors.textMuted,
-              ),
+              style: TextStyle(fontSize: 12, color: BlockingColors.textMuted),
             ),
         ],
       ),
@@ -2117,7 +2114,7 @@ class _FactRow extends StatelessWidget {
               children: [
                 Text(
                   fact.eyebrow,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                     color: BlockingColors.textMuted,
@@ -2244,7 +2241,7 @@ class _EmergencyQuestionsState extends State<_EmergencyQuestions> {
             ),
           ),
           const SizedBox(height: 10),
-          const Text(
+          Text(
             'Take a breath. There is no rush to answer.',
             style: TextStyle(fontSize: 13, color: BlockingColors.textMuted),
           ),
@@ -2319,7 +2316,7 @@ class _RetypeDialogState extends State<_RetypeDialog> {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
+          Text(
             'Type the $emergencyTextLength characters below. Paste is off; '
             'this is meant to be slow.',
             style: TextStyle(
@@ -2380,18 +2377,15 @@ class _RetypeDialogState extends State<_RetypeDialog> {
                   matched < typed.length
                       ? 'Mismatch at character ${matched + 1}'
                       : '',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: BlockingColors.rising,
-                  ),
+                  style: TextStyle(fontSize: 12, color: BlockingColors.rising),
                 ),
               ),
               Text(
                 '${typed.length} / ${widget.text.length}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   color: BlockingColors.textMuted,
-                  fontFeatures: [FontFeature.tabularFigures()],
+                  fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
             ],

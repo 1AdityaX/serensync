@@ -186,7 +186,7 @@ class _NumberLimitCardState extends State<_NumberLimitCard> {
                 const SizedBox(height: 4),
                 Text(
                   widget.unit,
-                  style: const TextStyle(color: BlockingColors.textMuted),
+                  style: TextStyle(color: BlockingColors.textMuted),
                 ),
               ],
             ),
@@ -322,7 +322,7 @@ class _ScheduleEditor extends StatelessWidget {
                 style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
               ),
               const Spacer(),
-              const Text(
+              Text(
                 'All day',
                 style: TextStyle(color: BlockingColors.textMuted, fontSize: 14),
               ),
@@ -352,10 +352,7 @@ class _ScheduleEditor extends StatelessWidget {
                       key: ValueKey('schedule-remove-time-$index'),
                       tooltip: 'Remove time',
                       onPressed: () => _removeTime(index),
-                      icon: const Icon(
-                        Icons.close,
-                        color: BlockingColors.textMuted,
-                      ),
+                      icon: Icon(Icons.close, color: BlockingColors.textMuted),
                     ),
                   ],
                 ],
@@ -426,14 +423,14 @@ class _ScheduleEditor extends StatelessWidget {
       initialValue: value.toString().padLeft(2, '0'),
       textAlign: TextAlign.center,
       style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w600),
-      decoration: const InputDecoration(
+      decoration: InputDecoration(
         filled: true,
         fillColor: BlockingColors.surfaceRaised,
-        border: OutlineInputBorder(
+        border: const OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
           borderSide: BorderSide.none,
         ),
-        contentPadding: EdgeInsets.symmetric(vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(vertical: 14),
       ),
       keyboardType: TextInputType.number,
       inputFormatters: [
@@ -468,10 +465,7 @@ class _ScheduleEditor extends StatelessWidget {
               const Spacer(),
               Text(
                 weekdaySummary(schedule.weekdays),
-                style: const TextStyle(
-                  color: BlockingColors.textMuted,
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: BlockingColors.textMuted, fontSize: 14),
               ),
             ],
           ),

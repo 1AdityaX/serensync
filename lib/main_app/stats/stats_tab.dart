@@ -30,7 +30,6 @@ const _months = [
   'Nov',
   'Dec',
 ];
-const _falling = Color(0xFF1E9E5A);
 
 typedef _Window = ({
   List<DateTime> starts,
@@ -220,7 +219,7 @@ class _StatsTabState extends State<StatsTab> with WidgetsBindingObserver {
 
   Widget _periodNavigator() {
     if (_range == _Range.week) {
-      return const SizedBox(
+      return SizedBox(
         height: 52,
         child: Center(
           child: Text(
@@ -276,7 +275,7 @@ class _StatsTabState extends State<StatsTab> with WidgetsBindingObserver {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Screen time', style: sectionLabel),
+          Text('Screen time', style: sectionLabel),
           const SizedBox(height: 10),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -310,7 +309,7 @@ class _StatsTabState extends State<StatsTab> with WidgetsBindingObserver {
                 view.previousTotal.inSeconds *
                 100)
             .round();
-    final color = change > 0 ? BlockingColors.rising : _falling;
+    final color = change > 0 ? BlockingColors.rising : BlockingColors.falling;
     final period = view.range == _Range.day ? 'yesterday' : 'last week';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
@@ -424,15 +423,15 @@ class _Total extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const figure = TextStyle(
+    final figure = TextStyle(
       fontSize: 44,
       height: 1,
       fontWeight: FontWeight.w300,
       letterSpacing: -1.2,
       color: BlockingColors.text,
-      fontFeatures: [FontFeature.tabularFigures()],
+      fontFeatures: const [FontFeature.tabularFigures()],
     );
-    const unit = TextStyle(
+    final unit = TextStyle(
       fontSize: 17,
       height: 1,
       fontWeight: FontWeight.w600,
@@ -444,10 +443,10 @@ class _Total extends StatelessWidget {
         children: [
           if (hours > 0) ...[
             TextSpan(text: '$hours', style: figure),
-            const TextSpan(text: 'h ', style: unit),
+            TextSpan(text: 'h ', style: unit),
           ],
           TextSpan(text: '${total.inMinutes.remainder(60)}', style: figure),
-          const TextSpan(text: 'm', style: unit),
+          TextSpan(text: 'm', style: unit),
         ],
       ),
     );
@@ -550,10 +549,7 @@ class _Tile extends StatelessWidget {
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 11,
-              color: BlockingColors.textMuted,
-            ),
+            style: TextStyle(fontSize: 11, color: BlockingColors.textMuted),
           ),
           Text(
             value,
@@ -576,8 +572,8 @@ class _EmptyUsage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 28),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 28),
       child: Center(
         child: Text(
           'Nothing recorded yet.',
@@ -627,7 +623,7 @@ class _UsageAccessGate extends StatelessWidget {
                 color: BlockingColors.accent.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.insights,
                 color: BlockingColors.accent,
                 size: 28,
@@ -639,7 +635,7 @@ class _UsageAccessGate extends StatelessWidget {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Shows how long you spend in each app. Nothing leaves your '
               'phone.',
               textAlign: TextAlign.center,

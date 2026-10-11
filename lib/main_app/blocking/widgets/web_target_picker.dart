@@ -61,13 +61,13 @@ class _WebTargetPickerState extends State<WebTargetPicker> {
                 padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
                 child: Text(
                   widget.invalidMessage,
-                  style: const TextStyle(color: BlockingColors.rising),
+                  style: TextStyle(color: BlockingColors.rising),
                 ),
               ),
             const SizedBox(height: 10),
             Expanded(
               child: _values.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Text(
                         'Nothing added yet.',
                         style: TextStyle(color: BlockingColors.textMuted),
@@ -144,7 +144,7 @@ class _WebTargetPickerState extends State<WebTargetPicker> {
       trailing: IconButton(
         key: ValueKey('remove-web-target-$value'),
         tooltip: 'Remove $value',
-        icon: const Icon(Icons.close, color: BlockingColors.textMuted),
+        icon: Icon(Icons.close, color: BlockingColors.textMuted),
         onPressed: () => setState(() => _values.remove(value)),
       ),
     );

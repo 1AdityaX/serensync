@@ -10,6 +10,7 @@ import '../blocking/onboarding/permission_status.dart';
 import '../common/cards.dart';
 import '../common/glyph_map.dart';
 import '../common/glyphs.dart';
+import 'appearance.dart';
 
 Future<void> _openHomeSettings() {
   return const AndroidIntent(
@@ -18,16 +19,18 @@ Future<void> _openHomeSettings() {
   ).launch();
 }
 
-/// Where a permission skipped during setup can be granted later, and where
-/// SerenSync can be made the home screen.
+/// Light or dark, permissions skipped during setup, and making SerenSync the
+/// home screen.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
     required this.permissionStatus,
+    required this.appearance,
     this.onOpenHomeSettings = _openHomeSettings,
   });
 
   final PermissionStatus permissionStatus;
+  final AppearanceController appearance;
   final Future<void> Function() onOpenHomeSettings;
 
   @override
@@ -74,7 +77,33 @@ class _SettingsScreenState extends State<SettingsScreen>
       body: ListView(
         padding: const EdgeInsets.fromLTRB(24, 4, 24, 32),
         children: [
-          const Text('Permissions', style: sectionLabel),
+          Text('Appearance', style: sectionLabel),
+          const SizedBox(height: 12),
+          ValueListenableBuilder<Appearance>(
+            valueListenable: widget.appearance,
+            builder: (context, current, _) => Row(
+              children: [
+                for (final (index, (option, glyph, label)) in const [
+                  (Appearance.system, Glyphs.contrast, 'Auto'),
+                  (Appearance.light, Glyphs.sun, 'Light'),
+                  (Appearance.dark, Glyphs.moon, 'Dark'),
+                ].indexed) ...[
+                  if (index > 0) const SizedBox(width: 10),
+                  Expanded(
+                    child: _AppearanceChoice(
+                      key: ValueKey('appearance-${option.name}'),
+                      glyph: glyph,
+                      label: label,
+                      selected: current == option,
+                      onTap: () => unawaited(widget.appearance.choose(option)),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 28),
+          Text('Permissions', style: sectionLabel),
           const SizedBox(height: 8),
           for (final permission in RequiredPermission.values)
             _PermissionRow(
@@ -83,13 +112,13 @@ class _SettingsScreenState extends State<SettingsScreen>
               onAllow: () => unawaited(_allow(permission)),
             ),
           const SizedBox(height: 28),
-          const Text('Launcher', style: sectionLabel),
+          Text('Launcher', style: sectionLabel),
           const SizedBox(height: 8),
           InkWell(
             key: const ValueKey('settings-home-app'),
             onTap: () => unawaited(widget.onOpenHomeSettings()),
             borderRadius: BorderRadius.circular(16),
-            child: const _Row(
+            child: _Row(
               glyph: Glyphs.home,
               title: 'Minimal home screen',
               detail: 'Set as home app',
@@ -131,7 +160,7 @@ class _PermissionRow extends StatelessWidget {
       detail: _purpose(permission),
       trailing: switch (granted) {
         null => const SizedBox(width: 48),
-        true => const GlyphBadge(
+        true => GlyphBadge(
           Glyphs.check,
           size: 30,
           color: BlockingColors.onAccent,
@@ -182,7 +211,7 @@ class _Row extends StatelessWidget {
                 ),
                 Text(
                   detail,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     color: BlockingColors.textMuted,
                   ),
@@ -205,4 +234,50 @@ String _purpose(RequiredPermission permission) {
     RequiredPermission.batteryOptimisation => 'Stay switched on',
     RequiredPermission.accessibility => 'Websites and strict mode',
   };
+}
+
+class _AppearanceChoice extends StatelessWidget {
+  const _AppearanceChoice({
+    super.key,
+    required this.glyph,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Glyphs glyph;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = selected ? BlockingColors.background : BlockingColors.text;
+    return Semantics(
+      selected: selected,
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: SoftCard(
+        onTap: onTap,
+        radius: 18,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        color: selected ? BlockingColors.text : BlockingColors.surface,
+        child: Column(
+          children: [
+            Glyph(glyph, size: 24, color: ink),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: ink,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

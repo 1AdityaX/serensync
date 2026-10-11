@@ -6,13 +6,15 @@ class Note extends StatelessWidget {
   const Note({
     super.key,
     this.icon = Icons.info_outline,
-    this.iconColor = BlockingColors.accent,
+    this.iconColor,
     required this.message,
     this.action,
   });
 
   final IconData icon;
-  final Color iconColor;
+
+  /// Defaults to the accent.
+  final Color? iconColor;
   final String message;
   final Widget? action;
 
@@ -26,12 +28,12 @@ class Note extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: iconColor),
+          Icon(icon, size: 20, color: iconColor ?? BlockingColors.accent),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13.5,
                 height: 1.4,
                 color: BlockingColors.textMuted,

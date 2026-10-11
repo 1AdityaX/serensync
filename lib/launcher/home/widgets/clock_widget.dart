@@ -54,10 +54,7 @@ class ClockWidget extends StatelessWidget {
             Text(
               '${_weekdays[now.weekday - 1]}, ${now.day} '
               '${_months[now.month - 1]}',
-              style: const TextStyle(
-                fontSize: 17,
-                color: BlockingColors.textMuted,
-              ),
+              style: TextStyle(fontSize: 17, color: BlockingColors.textMuted),
             ),
           ],
         );

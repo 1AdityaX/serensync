@@ -17,6 +17,8 @@ and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Icon tiles and a one-line summary in the block editor.
 - One-tap focus length presets.
 - A custom icon set and small illustrations, drawn in code.
+- A dark mode and an Appearance setting (Auto, Light or Dark). Auto follows
+  the phone and switches in place, without leaving the current screen.
 - A Settings screen that explains each permission and opens Android's home
   app picker.
 - Strict mode with PIN, charger, timer, and schedule unlock conditions, an

@@ -317,12 +317,12 @@ class _Setup extends StatelessWidget {
               ),
             ],
           ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(0, 28, 0, 10),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(0, 28, 0, 10),
             child: Text('Block during focus', style: sectionLabel),
           ),
           if (rules.isEmpty)
-            const Text(
+            Text(
               'No blocks yet',
               style: TextStyle(color: BlockingColors.textMuted),
             )
@@ -437,10 +437,7 @@ class _Running extends StatelessWidget {
               const SizedBox(width: 4),
               Text(
                 'Round ${session.round} of ${session.settings.rounds}',
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: BlockingColors.textMuted,
-                ),
+                style: TextStyle(fontSize: 14, color: BlockingColors.textMuted),
               ),
             ],
           ),
@@ -448,10 +445,7 @@ class _Running extends StatelessWidget {
           Text(
             blocking,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 14,
-              color: BlockingColors.textMuted,
-            ),
+            style: TextStyle(fontSize: 14, color: BlockingColors.textMuted),
           ),
           const Spacer(),
           OutlinedButton(
@@ -511,7 +505,7 @@ class _Message extends StatelessWidget {
                     Text(
                       body,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         height: 1.4,
                         color: BlockingColors.textMuted,
@@ -567,7 +561,7 @@ class _DialCenter extends StatelessWidget {
         ),
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w600,
             color: BlockingColors.textMuted,
@@ -597,7 +591,7 @@ class _Stepper extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 12, color: BlockingColors.textMuted),
+          style: TextStyle(fontSize: 12, color: BlockingColors.textMuted),
         ),
         FittedBox(
           fit: BoxFit.scaleDown,

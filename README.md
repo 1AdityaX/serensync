@@ -8,9 +8,11 @@ combines a quiet home screen with rules that interrupt distracting app use.
 - A Today tab that greets you, says in plain words what is blocked right now,
   compares today's screen time with yesterday by the same hour, lists any
   setup steps still missing, and links to every main action
-- A clean, minimal light look: lots of space, black ink, one blue accent,
+- A clean, minimal look in light and dark: lots of space, one blue accent,
   the bundled Inter typeface, and SerenSync's own icon set and small
   illustrations in place of long explanations
+- An Appearance setting: Auto follows the phone's dark mode, or pick Light
+  or Dark; the block screen follows the same choice
 - Minimal home screen with a still clock, the date, phone and camera
   shortcuts, and a hint that apps are one swipe away
 - Alphabetical app drawer with live search and package-change refresh

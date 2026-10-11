@@ -107,7 +107,7 @@ class _AppPickerState extends State<AppPicker> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.search, size: 20, color: BlockingColors.textMuted),
+          Icon(Icons.search, size: 20, color: BlockingColors.textMuted),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
@@ -133,7 +133,7 @@ class _AppPickerState extends State<AppPicker> {
               if (app.displayName.toLowerCase().contains(query)) app,
           ];
     if (apps.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'No matches.',
           style: TextStyle(color: BlockingColors.textMuted),
@@ -187,11 +187,7 @@ class _AppPickerState extends State<AppPicker> {
             ),
           ),
           child: selected
-              ? const Icon(
-                  Icons.check,
-                  size: 16,
-                  color: BlockingColors.onAccent,
-                )
+              ? Icon(Icons.check, size: 16, color: BlockingColors.onAccent)
               : null,
         ),
         onTap: () => _toggle(app.packageName, !selected),

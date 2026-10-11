@@ -32,7 +32,7 @@ class HomeScreen extends StatelessWidget {
                   label: 'Phone',
                   onPressed: onOpenDialer,
                 ),
-                const Expanded(
+                Expanded(
                   child: Glyph(
                     Glyphs.swipe,
                     size: 20,

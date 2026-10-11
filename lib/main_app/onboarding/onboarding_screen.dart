@@ -138,7 +138,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Widget _storyPage(int page) {
     return switch (page) {
       0 => _Page(
-        illustration: const _AnimatedHours(
+        illustration: _AnimatedHours(
           from: 0,
           to: 4.62,
           color: BlockingColors.rising,
@@ -156,7 +156,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         primary: ('Next', _next),
       ),
       _ => _Page(
-        illustration: const _AnimatedHours(
+        illustration: _AnimatedHours(
           from: 4.62,
           to: 1,
           color: BlockingColors.accent,
@@ -178,7 +178,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     if (!granted) {
       detail = Text(
         copy.how,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 14,
           height: 1.45,
           color: BlockingColors.text,
@@ -187,10 +187,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     } else if (permission == RequiredPermission.usageAccess && today != null) {
       detail = _TodayReveal(today);
     } else {
-      detail = const Row(
+      detail = Row(
         children: [
           Icon(Icons.check_circle, size: 20, color: BlockingColors.accent),
-          SizedBox(width: 8),
+          const SizedBox(width: 8),
           Text(
             'Allowed',
             style: TextStyle(fontSize: 14, color: BlockingColors.text),
@@ -213,7 +213,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Widget _finishedPage() {
     final allGranted = _permissions?.requiredGranted ?? false;
     return _Page(
-      illustration: const HourGrid(hours: 1, color: BlockingColors.accent),
+      illustration: HourGrid(hours: 1, color: BlockingColors.accent),
       title: 'Ready.',
       body: allGranted
           ? 'Create your first block and choose the apps it covers.'
@@ -373,7 +373,7 @@ class _Page extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             body,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               height: 1.45,
               color: BlockingColors.textMuted,
@@ -449,7 +449,7 @@ class _TodayReveal extends StatelessWidget {
         children: [
           Text(
             ruleDuration(report.total),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.w600,
               letterSpacing: -0.5,
@@ -459,10 +459,7 @@ class _TodayReveal extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             'on other apps today so far, across $opens.',
-            style: const TextStyle(
-              fontSize: 14,
-              color: BlockingColors.textMuted,
-            ),
+            style: TextStyle(fontSize: 14, color: BlockingColors.textMuted),
           ),
         ],
       ),

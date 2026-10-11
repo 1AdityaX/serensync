@@ -192,11 +192,11 @@ class _BlockScreenState extends State<_BlockScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              const Center(
+              Center(
                 child: BreathingCircle(
                   size: 220,
                   child: Glyph(
-                    Glyphs.sprout,
+                    Glyphs.block,
                     size: 34,
                     color: BlockingColors.onAccent,
                   ),
@@ -217,10 +217,7 @@ class _BlockScreenState extends State<_BlockScreen> {
               Text(
                 _host.isEmpty ? _ruleName : '$_host · $_ruleName',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: BlockingColors.textMuted,
-                ),
+                style: TextStyle(fontSize: 16, color: BlockingColors.textMuted),
               ),
               const SizedBox(height: 44),
               FilledButton.icon(

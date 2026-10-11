@@ -6,8 +6,8 @@ import '../blocking/blocking_colors.dart';
 
 /// Small scenes that say at a glance what words would otherwise explain.
 enum Scene {
-  /// A sprout in a pot: nothing set up yet, room to grow.
-  sprout,
+  /// A phone with one app blocked: what a block does, before there is one.
+  phone,
 
   /// A shield with a tick: blocks are working right now.
   shield,
@@ -68,8 +68,8 @@ class _ScenePainter extends CustomPainter {
     final accent = Paint()..color = BlockingColors.accent;
     final paper = Paint()..color = BlockingColors.background;
     switch (scene) {
-      case Scene.sprout:
-        _sprout(canvas, ink, accent, paper);
+      case Scene.phone:
+        _phone(canvas, ink, accent, paper);
       case Scene.shield:
         _shield(canvas, ink, accent);
       case Scene.sunrise:
@@ -82,35 +82,41 @@ class _ScenePainter extends CustomPainter {
     canvas.restore();
   }
 
-  void _sprout(Canvas c, Paint ink, Paint accent, Paint paper) {
-    final pot = Path()
-      ..moveTo(33, 62)
-      ..lineTo(67, 62)
-      ..lineTo(62.5, 84)
-      ..quadraticBezierTo(62, 86, 60, 86)
-      ..lineTo(40, 86)
-      ..quadraticBezierTo(38, 86, 37.5, 84)
-      ..close();
-    c.drawPath(pot, accent);
-    c.drawRRect(
-      RRect.fromLTRBR(29, 56, 71, 64, const Radius.circular(3)),
-      accent,
-    );
-    c.drawLine(const Offset(50, 56), const Offset(50, 36), ink);
-    final left = Path()
-      ..moveTo(50, 46)
-      ..cubicTo(40, 47, 31, 42, 29, 31)
-      ..cubicTo(40, 30, 48, 36, 50, 46)
-      ..close();
-    final right = Path()
-      ..moveTo(50, 38)
-      ..cubicTo(51, 27, 60, 19, 72, 19)
-      ..cubicTo(72, 31, 62, 38, 50, 38)
-      ..close();
-    for (final leaf in [left, right]) {
-      c.drawPath(leaf, paper);
-      c.drawPath(leaf, ink);
+  void _phone(Canvas c, Paint ink, Paint accent, Paint paper) {
+    final body = RRect.fromLTRBR(30, 12, 66, 88, const Radius.circular(9));
+    c.drawRRect(body, paper);
+    c.drawRRect(body, ink);
+    c.drawLine(const Offset(44, 19), const Offset(52, 19), ink);
+    final tile = Paint()..color = BlockingColors.surfaceRaised;
+    for (final top in const [28.0, 43.0, 58.0]) {
+      for (final left in const [35.0, 50.0]) {
+        c.drawRRect(
+          RRect.fromLTRBR(
+            left,
+            top,
+            left + 11,
+            top + 11,
+            const Radius.circular(3),
+          ),
+          tile,
+        );
+      }
     }
+    // A blocked badge over the corner, cut out from the phone by a ring.
+    const centre = Offset(66, 70);
+    c.drawCircle(centre, 19, paper);
+    c.drawCircle(centre, 16, accent);
+    final mark = Paint()
+      ..color = BlockingColors.onAccent
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.2
+      ..strokeCap = StrokeCap.round;
+    c.drawCircle(centre, 8, mark);
+    c.drawLine(
+      centre + const Offset(-5.6, 5.6),
+      centre + const Offset(5.6, -5.6),
+      mark,
+    );
   }
 
   void _shield(Canvas c, Paint ink, Paint accent) {

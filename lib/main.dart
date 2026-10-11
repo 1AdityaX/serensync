@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,22 +16,30 @@ import 'main_app/dashboard_screen.dart';
 import 'main_app/onboarding/onboarding_screen.dart';
 import 'main_app/onboarding/onboarding_store.dart';
 import 'main_app/pomodoro/pomodoro_store.dart';
+import 'main_app/settings/appearance.dart';
 import 'main_app/strict/strict_mode_store.dart';
+import 'main_app/blocking/blocking_colors.dart';
 import 'theme.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   initializeBlockingService();
-  runApp(MyApp());
+  // Read before the first frame so a dark phone never flashes light.
+  final appearance = await AppearanceStore().read();
+  runApp(MyApp(appearance: AppearanceController(initial: appearance)));
 }
 
 @pragma('vm:entry-point')
-void overlayMain() {
+Future<void> overlayMain() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final appearance = await AppearanceStore().read();
+  applyPalette(
+    paletteFor(appearance, PlatformDispatcher.instance.platformBrightness),
+  );
   runApp(const BlockOverlayApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   final AppService appService;
   final LauncherController launcherController;
   final RuleStore ruleStore;
@@ -39,6 +48,7 @@ class MyApp extends StatelessWidget {
   final BlockingService blockingService;
   final PomodoroStore pomodoroStore;
   final StrictModeStore strictModeStore;
+  final AppearanceController appearance;
 
   MyApp({
     super.key,
@@ -50,6 +60,7 @@ class MyApp extends StatelessWidget {
     BlockingService? blockingService,
     PomodoroStore? pomodoroStore,
     StrictModeStore? strictModeStore,
+    AppearanceController? appearance,
   }) : appService = appService ?? AppService(),
        launcherController = launcherController ?? LauncherController(),
        ruleStore = ruleStore ?? RuleStore(),
@@ -57,33 +68,69 @@ class MyApp extends StatelessWidget {
        permissionStatus = permissionStatus ?? PermissionStatus(),
        blockingService = blockingService ?? BlockingService(),
        pomodoroStore = pomodoroStore ?? PomodoroStore(),
-       strictModeStore = strictModeStore ?? StrictModeStore();
+       strictModeStore = strictModeStore ?? StrictModeStore(),
+       appearance = appearance ?? AppearanceController();
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    widget.appearance.addListener(_followAppearance);
+    // Nothing is built yet, so the palette only needs setting.
+    applyPalette(_palette);
+  }
+
+  Palette get _palette => paletteFor(
+    widget.appearance.value,
+    WidgetsBinding.instance.platformDispatcher.platformBrightness,
+  );
+
+  void _followAppearance() {
+    if (showPalette(_palette)) setState(() {});
+  }
+
+  @override
+  void didChangePlatformBrightness() => _followAppearance();
+
+  @override
+  void dispose() {
+    widget.appearance.removeListener(_followAppearance);
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: appTheme,
-      // Screens without an app bar still need dark bar icons.
+      // Screens without an app bar still need bar icons that contrast.
       builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
         value: systemBars,
         child: child!,
       ),
       home: MainScreen(
-        appService: appService,
-        launcherController: launcherController,
-        ruleStore: ruleStore,
-        onboardingStore: onboardingStore,
-        permissionStatus: permissionStatus,
-        blockingService: blockingService,
-        pomodoroStore: pomodoroStore,
-        strictModeStore: strictModeStore,
+        appService: widget.appService,
+        launcherController: widget.launcherController,
+        ruleStore: widget.ruleStore,
+        onboardingStore: widget.onboardingStore,
+        permissionStatus: widget.permissionStatus,
+        blockingService: widget.blockingService,
+        pomodoroStore: widget.pomodoroStore,
+        strictModeStore: widget.strictModeStore,
+        appearance: widget.appearance,
       ),
     );
   }
 }
 
 class MainScreen extends StatefulWidget {
+  final AppearanceController appearance;
   final AppService appService;
   final LauncherController launcherController;
   final RuleStore ruleStore;
@@ -95,6 +142,7 @@ class MainScreen extends StatefulWidget {
 
   const MainScreen({
     super.key,
+    required this.appearance,
     required this.appService,
     required this.launcherController,
     required this.ruleStore,
@@ -156,6 +204,7 @@ class _MainScreenState extends State<MainScreen> {
     }
     if (!showLauncher) {
       return DashboardScreen(
+        appearance: widget.appearance,
         appService: widget.appService,
         ruleStore: widget.ruleStore,
         blockingService: widget.blockingService,

@@ -175,10 +175,7 @@ class _TodayTabState extends State<TodayTab> with WidgetsBindingObserver {
           const SizedBox(height: 4),
           Text(
             _dateLabel(now),
-            style: const TextStyle(
-              fontSize: 15,
-              color: BlockingColors.textMuted,
-            ),
+            style: TextStyle(fontSize: 15, color: BlockingColors.textMuted),
           ),
           const SizedBox(height: 28),
           _hero(now, enabled),
@@ -289,7 +286,7 @@ class _TodayTabState extends State<TodayTab> with WidgetsBindingObserver {
     }
     if (enabled.isEmpty) {
       return _Hero(
-        scene: Scene.sprout,
+        scene: Scene.phone,
         title: 'No blocks yet',
         detail: 'Close the apps that pull you in',
         action: FilledButton.icon(
@@ -430,7 +427,7 @@ class _Hero extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       detail,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         color: BlockingColors.textMuted,
                       ),
@@ -463,7 +460,7 @@ class _SetupTile extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Glyph(Glyphs.alert, size: 20, color: BlockingColors.rising),
+              Glyph(Glyphs.alert, size: 20, color: BlockingColors.rising),
               const SizedBox(width: 10),
               const Expanded(
                 child: Text(
@@ -475,7 +472,7 @@ class _SetupTile extends StatelessWidget {
                 padding: const EdgeInsets.only(right: 10),
                 child: Text(
                   '${missing.length} left',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     color: BlockingColors.textMuted,
                   ),
@@ -534,7 +531,7 @@ class _UsageTile extends StatelessWidget {
     if (yesterday == Duration.zero) {
       change = null;
     } else if (difference.inMinutes.abs() < 5) {
-      change = const _Change(
+      change = _Change(
         glyph: null,
         label: 'Same as yesterday',
         color: BlockingColors.textMuted,
@@ -544,7 +541,7 @@ class _UsageTile extends StatelessWidget {
         glyph: Glyphs.arrowDown,
         label: _delta(difference),
         semantics: '${_delta(difference)} less than yesterday',
-        color: const Color(0xFF1E9E5A),
+        color: BlockingColors.falling,
       );
     } else {
       change = _Change(
@@ -562,7 +559,7 @@ class _UsageTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Screen time',
             style: TextStyle(fontSize: 14, color: BlockingColors.textMuted),
           ),
@@ -587,34 +584,23 @@ class _UsageTile extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              const Glyph(
-                Glyphs.launch,
-                size: 18,
-                color: BlockingColors.textMuted,
-              ),
+              Glyph(Glyphs.launch, size: 18, color: BlockingColors.textMuted),
               const SizedBox(width: 6),
               Text(
                 '$opens',
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: BlockingColors.textMuted,
-                ),
+                style: TextStyle(fontSize: 14, color: BlockingColors.textMuted),
                 semanticsLabel: '$opens opens',
               ),
               if (topApp != null) ...[
                 const SizedBox(width: 18),
-                const Glyph(
-                  Glyphs.apps,
-                  size: 18,
-                  color: BlockingColors.textMuted,
-                ),
+                Glyph(Glyphs.apps, size: 18, color: BlockingColors.textMuted),
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(
                     topApp,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       color: BlockingColors.textMuted,
                     ),
@@ -706,7 +692,7 @@ class _RoundAction extends StatelessWidget {
                 width: 60,
                 height: 60,
                 alignment: Alignment.center,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: BlockingColors.surface,
                   shape: BoxShape.circle,
                 ),

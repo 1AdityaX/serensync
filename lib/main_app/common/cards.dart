@@ -12,7 +12,7 @@ class SoftCard extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.padding = const EdgeInsets.all(18),
-    this.color = BlockingColors.surface,
+    this.color,
     this.borderColor = Colors.transparent,
     this.radius = 22,
   });
@@ -21,14 +21,16 @@ class SoftCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final EdgeInsetsGeometry padding;
-  final Color color;
+
+  /// Defaults to the surface colour.
+  final Color? color;
   final Color borderColor;
   final double radius;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: color,
+      color: color ?? BlockingColors.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(radius),
         side: BorderSide(color: borderColor, width: 1.5),
@@ -48,14 +50,18 @@ class GlyphBadge extends StatelessWidget {
   const GlyphBadge(
     this.glyph, {
     super.key,
-    this.color = BlockingColors.text,
-    this.background = BlockingColors.background,
+    this.color,
+    this.background,
     this.size = 44,
   });
 
   final Glyphs glyph;
-  final Color color;
-  final Color background;
+
+  /// Defaults to the ink colour.
+  final Color? color;
+
+  /// Defaults to the page background.
+  final Color? background;
   final double size;
 
   @override
@@ -64,8 +70,15 @@ class GlyphBadge extends StatelessWidget {
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: BoxDecoration(color: background, shape: BoxShape.circle),
-      child: Glyph(glyph, size: size * 0.5, color: color),
+      decoration: BoxDecoration(
+        color: background ?? BlockingColors.background,
+        shape: BoxShape.circle,
+      ),
+      child: Glyph(
+        glyph,
+        size: size * 0.5,
+        color: color ?? BlockingColors.text,
+      ),
     );
   }
 }

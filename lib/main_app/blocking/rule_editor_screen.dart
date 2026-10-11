@@ -314,7 +314,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
             const SizedBox(height: 28),
             _conditionSection(),
             const SizedBox(height: 28),
-            const Text('Name', style: sectionLabel),
+            Text('Name', style: sectionLabel),
             const SizedBox(height: 10),
             _nameField(),
             if (widget.locked && widget.rule != null) ...[
@@ -364,7 +364,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: BlockingColors.text, width: 1.5),
+          borderSide: BorderSide(color: BlockingColors.text, width: 1.5),
         ),
       ),
     );
@@ -375,7 +375,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('When', style: sectionLabel),
+        Text('When', style: sectionLabel),
         const SizedBox(height: 10),
         Row(
           key: const ValueKey('trigger-type'),
@@ -423,7 +423,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
                       secondary,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: BlockingColors.textMuted,
                         fontSize: 13.5,
                       ),
@@ -431,7 +431,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
                   ],
                 ),
               ),
-              const Glyph(
+              Glyph(
                 Glyphs.chevronRight,
                 size: 20,
                 color: BlockingColors.textMuted,
@@ -447,7 +447,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Block', style: sectionLabel),
+        Text('Block', style: sectionLabel),
         const SizedBox(height: 10),
         Row(
           children: [
@@ -539,7 +539,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
                 child: Text(
                   hint,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     color: BlockingColors.textMuted,
                   ),
@@ -549,7 +549,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
               key: const ValueKey('rule-save'),
               onPressed: disabled ? null : _save,
               child: _saving
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 22,
                       height: 22,
                       child: CircularProgressIndicator(
@@ -596,7 +596,7 @@ class _Summary extends StatelessWidget {
     return Text(
       sentence,
       key: const ValueKey('rule-sentence'),
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 15,
         height: 1.4,
         color: BlockingColors.textMuted,
@@ -640,11 +640,7 @@ class _Square extends StatelessWidget {
     } else if (count == null) {
       corner = const SizedBox(height: 24);
     } else if (count == 0) {
-      corner = const Glyph(
-        Glyphs.plus,
-        size: 18,
-        color: BlockingColors.textMuted,
-      );
+      corner = Glyph(Glyphs.plus, size: 18, color: BlockingColors.textMuted);
     } else {
       corner = Container(
         constraints: const BoxConstraints(minWidth: 24),
@@ -657,7 +653,7 @@ class _Square extends StatelessWidget {
         ),
         child: Text(
           '$count',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
             color: BlockingColors.onAccent,

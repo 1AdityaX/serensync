@@ -206,7 +206,7 @@ class _RuleListState extends State<RuleList> {
     if (_loadFailed && _rules == null) {
       return Center(
         child: EmptyState(
-          scene: Scene.sprout,
+          scene: Scene.phone,
           title: 'Couldn’t load blocks',
           action: TextButton(
             onPressed: _loadRules,
@@ -245,13 +245,13 @@ class _RuleListState extends State<RuleList> {
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 112),
           children: [
             if (widget.locked)
-              const Padding(
-                key: ValueKey('rules-locked'),
-                padding: EdgeInsets.fromLTRB(2, 4, 2, 8),
+              Padding(
+                key: const ValueKey('rules-locked'),
+                padding: const EdgeInsets.fromLTRB(2, 4, 2, 8),
                 child: Row(
                   children: [
                     Glyph(Glyphs.lock, size: 18, color: BlockingColors.accent),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Strict mode: tighten only',
@@ -301,7 +301,7 @@ class _EmptyBlocks extends StatelessWidget {
       children: [
         const Padding(
           padding: EdgeInsets.fromLTRB(0, 24, 0, 8),
-          child: EmptyState(scene: Scene.sprout, title: 'No blocks yet'),
+          child: EmptyState(scene: Scene.phone, title: 'No blocks yet'),
         ),
         const _SectionHeader('Start with'),
         GridView.count(
@@ -331,7 +331,7 @@ class _EmptyBlocks extends StatelessWidget {
                     ),
                     Text(
                       idea.detail,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
                         color: BlockingColors.textMuted,
                       ),
@@ -465,10 +465,7 @@ class _Targets extends StatelessWidget {
             const SizedBox(width: 3),
             Text(
               '$count',
-              style: const TextStyle(
-                fontSize: 13,
-                color: BlockingColors.textMuted,
-              ),
+              style: TextStyle(fontSize: 13, color: BlockingColors.textMuted),
             ),
           ],
         ],
@@ -495,7 +492,7 @@ class _BlockMenu extends StatelessWidget {
     return PopupMenuButton<_BlockAction>(
       key: ValueKey('rule-menu-${rule.id}'),
       tooltip: 'More for ${rule.name}',
-      icon: const Glyph(Glyphs.more, size: 20, color: BlockingColors.textMuted),
+      icon: Glyph(Glyphs.more, size: 20, color: BlockingColors.textMuted),
       position: PopupMenuPosition.under,
       onSelected: onSelected,
       itemBuilder: (_) => [
@@ -514,7 +511,7 @@ class _BlockMenu extends StatelessWidget {
   PopupMenuItem<_BlockAction> _item(
     _BlockAction action,
     String label, [
-    Color color = BlockingColors.text,
+    Color? color,
   ]) {
     return PopupMenuItem(
       key: ValueKey('rule-${action.name}'),
@@ -525,7 +522,7 @@ class _BlockMenu extends StatelessWidget {
         style: TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.w500,
-          color: color,
+          color: color ?? BlockingColors.text,
         ),
       ),
     );

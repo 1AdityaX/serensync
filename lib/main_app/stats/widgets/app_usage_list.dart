@@ -140,10 +140,7 @@ class _AppRow extends StatelessWidget {
             const SizedBox(height: 3),
             Text(
               '${app.opens} ${app.opens == 1 ? 'open' : 'opens'}',
-              style: const TextStyle(
-                fontSize: 10.5,
-                color: BlockingColors.textMuted,
-              ),
+              style: TextStyle(fontSize: 10.5, color: BlockingColors.textMuted),
             ),
           ],
         ),

@@ -13,6 +13,7 @@ import 'common/cards.dart';
 import 'common/glyphs.dart';
 import 'pomodoro/pomodoro_store.dart';
 import 'pomodoro/pomodoro_tab.dart';
+import 'settings/appearance.dart';
 import 'settings/settings_screen.dart';
 import 'stats/stats_tab.dart';
 import 'strict/strict_mode.dart';
@@ -25,6 +26,7 @@ enum _DashboardTab { today, focus, blocks, strictMode, insights }
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
     super.key,
+    required this.appearance,
     required this.appService,
     required this.ruleStore,
     required this.blockingService,
@@ -34,6 +36,7 @@ class DashboardScreen extends StatefulWidget {
     this.todayUsage = readTodayUsage,
   });
 
+  final AppearanceController appearance;
   final AppService appService;
   final RuleStore ruleStore;
   final BlockingService blockingService;
@@ -110,8 +113,10 @@ class _DashboardScreenState extends State<DashboardScreen>
   Future<void> _openSettings() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            SettingsScreen(permissionStatus: widget.permissionStatus),
+        builder: (_) => SettingsScreen(
+          permissionStatus: widget.permissionStatus,
+          appearance: widget.appearance,
+        ),
       ),
     );
     await _refresh();
@@ -246,7 +251,7 @@ class _PermissionBanner extends StatelessWidget {
         radius: 18,
         child: Row(
           children: [
-            const Glyph(Glyphs.alert, size: 20, color: BlockingColors.rising),
+            Glyph(Glyphs.alert, size: 20, color: BlockingColors.rising),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
