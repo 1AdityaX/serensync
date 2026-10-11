@@ -3,11 +3,14 @@ import 'dart:async';
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:android_intent_plus/flag.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:tamper_guard/tamper_guard.dart';
 
 import '../../theme.dart';
+import '../common/glyphs.dart';
+import '../common/illustrations.dart';
 import 'blocking_colors.dart';
 import 'rule.dart';
 
@@ -108,6 +111,11 @@ class BlockOverlayApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: appTheme,
+      // Screens without an app bar still need dark bar icons.
+      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+        value: systemBars,
+        child: child!,
+      ),
       home: const _BlockScreen(),
     );
   }
@@ -184,52 +192,44 @@ class _BlockScreenState extends State<_BlockScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              Container(
-                width: 72,
-                height: 72,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: BlockingColors.accent.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.lock_outline,
-                  color: BlockingColors.accent,
-                  size: 32,
-                ),
-              ),
-              const SizedBox(height: 28),
-              const Text(
-                'Blocked',
-                textAlign: TextAlign.center,
-                style: sectionLabel,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                _ruleName,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 28,
-                  height: 1.15,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.6,
-                ),
-              ),
-              if (_host.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _host,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: BlockingColors.textMuted,
+              const Center(
+                child: BreathingCircle(
+                  size: 220,
+                  child: Glyph(
+                    Glyphs.sprout,
+                    size: 34,
+                    color: BlockingColors.onAccent,
                   ),
                 ),
-              ],
+              ),
               const SizedBox(height: 36),
-              FilledButton(
+              const Text(
+                'Pause',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 40,
+                  height: 1.1,
+                  fontWeight: FontWeight.w300,
+                  letterSpacing: -1.2,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                _host.isEmpty ? _ruleName : '$_host · $_ruleName',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: BlockingColors.textMuted,
+                ),
+              ),
+              const SizedBox(height: 44),
+              FilledButton.icon(
                 onPressed: _leave,
-                child: Text(_host.isEmpty ? 'Go home' : 'Go back'),
+                icon: Glyph(
+                  _host.isEmpty ? Glyphs.home : Glyphs.chevronLeft,
+                  size: 20,
+                ),
+                label: Text(_host.isEmpty ? 'Home' : 'Back'),
               ),
             ],
           ),

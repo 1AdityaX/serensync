@@ -1,12 +1,73 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../apps/app_service.dart';
 import '../../../theme.dart';
+import '../../common/cards.dart';
+import '../../common/glyph_map.dart';
+import '../../common/glyphs.dart';
+import '../../common/illustrations.dart';
 import '../blocking_colors.dart';
 import '../blocking_engine.dart';
 import '../rule.dart';
 import '../rule_editor_screen.dart';
 import '../rule_store.dart';
+
+/// Ready-made starting points offered while there are no blocks yet.
+typedef BlockIdea = ({
+  String key,
+  Glyphs glyph,
+  String name,
+  String label,
+  String detail,
+  Trigger trigger,
+});
+
+const _everyDay = {1, 2, 3, 4, 5, 6, 7};
+
+const blockIdeas = <BlockIdea>[
+  (
+    key: 'evenings',
+    glyph: Glyphs.moon,
+    name: 'Calm evenings',
+    label: 'Evenings',
+    detail: '21:00–07:00',
+    trigger: Schedule(
+      weekdays: _everyDay,
+      startMinute: 21 * 60,
+      endMinute: 7 * 60,
+    ),
+  ),
+  (
+    key: 'workday',
+    glyph: Glyphs.briefcase,
+    name: 'Workday focus',
+    label: 'Work',
+    detail: 'Mon–Fri 9–5',
+    trigger: Schedule(
+      weekdays: {1, 2, 3, 4, 5},
+      startMinute: 9 * 60,
+      endMinute: 17 * 60,
+    ),
+  ),
+  (
+    key: 'hour',
+    glyph: Glyphs.hourglass,
+    name: 'An hour a day',
+    label: '1 hour',
+    detail: 'a day',
+    trigger: UsageQuota(Duration(hours: 1)),
+  ),
+  (
+    key: 'checkins',
+    glyph: Glyphs.launch,
+    name: 'Fewer check-ins',
+    label: '5 opens',
+    detail: 'a day',
+    trigger: LaunchQuota(5),
+  ),
+];
 
 class RuleList extends StatefulWidget {
   const RuleList({
@@ -50,7 +111,7 @@ class _RuleListState extends State<RuleList> {
     }
   }
 
-  Future<void> _openEditor([BlockRule? rule]) async {
+  Future<void> _openEditor({BlockRule? rule, BlockIdea? idea}) async {
     final saved = await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
         builder: (_) => RuleEditorScreen(
@@ -59,6 +120,8 @@ class _RuleListState extends State<RuleList> {
           blockingService: widget.blockingService,
           locked: widget.locked,
           rule: rule,
+          draftName: idea?.name,
+          draftTrigger: idea?.trigger,
         ),
       ),
     );
@@ -109,11 +172,28 @@ class _RuleListState extends State<RuleList> {
     await widget.blockingService.sync(widget.ruleStore);
     if (!mounted) return;
     setState(() => _rules?.removeWhere((candidate) => candidate.id == rule.id));
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('“${rule.name}” deleted'),
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () => unawaited(_restore(rule)),
+          ),
+        ),
+      );
+  }
+
+  Future<void> _restore(BlockRule rule) async {
+    await widget.ruleStore.insert(rule);
+    await widget.blockingService.sync(widget.ruleStore);
+    await _loadRules();
   }
 
   Future<void> _act(BlockRule rule, _BlockAction action) {
     return switch (action) {
-      _BlockAction.edit => _openEditor(rule),
+      _BlockAction.edit => _openEditor(rule: rule),
       _BlockAction.pause => _toggle(rule, false),
       _BlockAction.block => _toggle(rule, true),
       _BlockAction.duplicate => _duplicate(rule),
@@ -125,13 +205,13 @@ class _RuleListState extends State<RuleList> {
   Widget build(BuildContext context) {
     if (_loadFailed && _rules == null) {
       return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Could not load your blocks.'),
-            const SizedBox(height: 8),
-            TextButton(onPressed: _loadRules, child: const Text('Retry')),
-          ],
+        child: EmptyState(
+          scene: Scene.sprout,
+          title: 'Couldn’t load blocks',
+          action: TextButton(
+            onPressed: _loadRules,
+            child: const Text('Try again'),
+          ),
         ),
       );
     }
@@ -140,6 +220,7 @@ class _RuleListState extends State<RuleList> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final now = DateTime.now();
     final active = [
       for (final rule in rules)
         if (rule.enabled) rule,
@@ -149,80 +230,118 @@ class _RuleListState extends State<RuleList> {
         if (!rule.enabled) rule,
     ];
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
+    Widget card(BlockRule rule) => _BlockCard(
+      rule: rule,
+      now: now,
+      locked: widget.locked,
+      onOpen: () => _openEditor(rule: rule),
+      onToggle: (enabled) => unawaited(_toggle(rule, enabled)),
+      onAction: (action) => _act(rule, action),
+    );
+
+    return Stack(
       children: [
-        _CreateBlockButton(onPressed: () => _openEditor()),
-        if (widget.locked)
-          const Padding(
-            key: ValueKey('rules-locked'),
-            padding: EdgeInsets.fromLTRB(4, 16, 4, 0),
-            child: Row(
-              children: [
-                Icon(Icons.shield, size: 16, color: BlockingColors.accent),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Strict mode is on. Blocks can only be made stricter.',
-                    style: TextStyle(color: BlockingColors.textMuted),
-                  ),
+        ListView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 112),
+          children: [
+            if (widget.locked)
+              const Padding(
+                key: ValueKey('rules-locked'),
+                padding: EdgeInsets.fromLTRB(2, 4, 2, 8),
+                child: Row(
+                  children: [
+                    Glyph(Glyphs.lock, size: 18, color: BlockingColors.accent),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Strict mode: tighten only',
+                        style: TextStyle(color: BlockingColors.textMuted),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            if (rules.isEmpty)
+              _EmptyBlocks(onIdea: (idea) => _openEditor(idea: idea)),
+            if (active.isNotEmpty) ...[
+              const _SectionHeader('Active'),
+              for (final rule in active) card(rule),
+            ],
+            if (inactive.isNotEmpty) ...[
+              const _SectionHeader('Paused'),
+              for (final rule in inactive) card(rule),
+            ],
+          ],
+        ),
+        Positioned(
+          right: 20,
+          bottom: 20,
+          child: FloatingActionButton(
+            key: const ValueKey('create-block'),
+            heroTag: null,
+            tooltip: 'New block',
+            onPressed: () => _openEditor(),
+            child: const Glyph(Glyphs.plus, size: 26),
           ),
-        if (rules.isEmpty)
-          const Padding(
-            padding: EdgeInsets.fromLTRB(4, 24, 4, 0),
-            child: Text(
-              'No blocks yet.',
-              style: TextStyle(color: BlockingColors.textMuted),
-            ),
-          ),
-        if (active.isNotEmpty) ...[
-          const _SectionHeader('Active blocks'),
-          for (final rule in active)
-            _BlockCard(
-              rule: rule,
-              locked: widget.locked,
-              onOpen: () => _openEditor(rule),
-              onAction: (action) => _act(rule, action),
-            ),
-        ],
-        if (inactive.isNotEmpty) ...[
-          const _SectionHeader('Paused blocks'),
-          for (final rule in inactive)
-            _BlockCard(
-              rule: rule,
-              locked: widget.locked,
-              onOpen: () => _openEditor(rule),
-              onAction: (action) => _act(rule, action),
-            ),
-        ],
+        ),
       ],
     );
   }
 }
 
-class _CreateBlockButton extends StatelessWidget {
-  const _CreateBlockButton({required this.onPressed});
+class _EmptyBlocks extends StatelessWidget {
+  const _EmptyBlocks({required this.onIdea});
 
-  final VoidCallback onPressed;
+  final ValueChanged<BlockIdea> onIdea;
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: OutlinedButton.icon(
-        key: const ValueKey('create-block'),
-        onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: BlockingColors.accent,
-          side: const BorderSide(color: BlockingColors.accent),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(0, 24, 0, 8),
+          child: EmptyState(scene: Scene.sprout, title: 'No blocks yet'),
         ),
-        icon: const Icon(Icons.add),
-        label: const Text('Create a block'),
-      ),
+        const _SectionHeader('Start with'),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.25,
+          children: [
+            for (final idea in blockIdeas)
+              SoftCard(
+                key: ValueKey('block-idea-${idea.key}'),
+                onTap: () => onIdea(idea),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    GlyphBadge(idea.glyph, size: 40),
+                    const Spacer(),
+                    Text(
+                      idea.label,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      idea.detail,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: BlockingColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -235,7 +354,7 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 24, 4, 8),
+      padding: const EdgeInsets.fromLTRB(2, 20, 2, 10),
       child: Text(title, style: sectionLabel),
     );
   }
@@ -244,91 +363,121 @@ class _SectionHeader extends StatelessWidget {
 class _BlockCard extends StatelessWidget {
   const _BlockCard({
     required this.rule,
+    required this.now,
     required this.locked,
     required this.onOpen,
+    required this.onToggle,
     required this.onAction,
   });
 
   final BlockRule rule;
+  final DateTime now;
   final bool locked;
   final VoidCallback onOpen;
+  final ValueChanged<bool> onToggle;
   final ValueChanged<_BlockAction> onAction;
 
   @override
   Widget build(BuildContext context) {
-    final tint = rule.enabled
-        ? BlockingColors.accent
-        : BlockingColors.textMuted;
+    // Strict mode only lets a block be switched on, never off.
+    final canToggle = !rule.enabled || !locked;
+    final muted = !rule.enabled;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Material(
-        color: BlockingColors.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: const BorderSide(color: BlockingColors.outline),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onOpen,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 4, 14),
-            child: Row(
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: tint.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
+      child: SoftCard(
+        onTap: onOpen,
+        padding: const EdgeInsets.fromLTRB(16, 14, 4, 14),
+        child: Row(
+          children: [
+            GlyphBadge(
+              triggerGlyph(rule.trigger),
+              color: muted ? BlockingColors.textMuted : BlockingColors.text,
+              size: 44,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    rule.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: muted
+                          ? BlockingColors.textMuted
+                          : BlockingColors.text,
+                    ),
                   ),
-                  child: Icon(
-                    _triggerIcon(rule.trigger),
-                    size: 20,
-                    color: tint,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(height: 6),
+                  Row(
                     children: [
-                      Text(
-                        rule.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
+                      Flexible(
+                        child: StatusPill(
+                          label: ruleStatusShort(rule, now),
+                          active: blockingNow(rule, now),
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${triggerSummary(rule.trigger)}\n'
-                        '${_targetSummary(rule)}',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12.5,
-                          height: 1.35,
-                          color: BlockingColors.textMuted,
-                        ),
-                      ),
+                      const SizedBox(width: 12),
+                      _Targets(rule),
                     ],
                   ),
-                ),
-                _BlockMenu(rule: rule, locked: locked, onSelected: onAction),
-              ],
+                ],
+              ),
             ),
-          ),
+            Switch(
+              key: ValueKey('rule-switch-${rule.id}'),
+              value: rule.enabled,
+              onChanged: canToggle ? onToggle : null,
+            ),
+            _BlockMenu(rule: rule, locked: locked, onSelected: onAction),
+          ],
         ),
       ),
     );
   }
 }
 
-enum _BlockAction { edit, pause, block, duplicate, delete }
+/// What a block covers, as icon and count pairs.
+class _Targets extends StatelessWidget {
+  const _Targets(this.rule);
 
-const _danger = Color(0xFFF28B82);
+  final BlockRule rule;
+
+  @override
+  Widget build(BuildContext context) {
+    final counts = [
+      if (rule.packages.isNotEmpty) (Glyphs.apps, rule.packages.length),
+      if (rule.websites.isNotEmpty) (Glyphs.globe, rule.websites.length),
+      if (rule.keywords.isNotEmpty) (Glyphs.search, rule.keywords.length),
+    ];
+    return Semantics(
+      label: _targetSummary(rule),
+      excludeSemantics: true,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final (index, (glyph, count)) in counts.indexed) ...[
+            if (index > 0) const SizedBox(width: 10),
+            Glyph(glyph, size: 15, color: BlockingColors.textMuted),
+            const SizedBox(width: 3),
+            Text(
+              '$count',
+              style: const TextStyle(
+                fontSize: 13,
+                color: BlockingColors.textMuted,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+enum _BlockAction { edit, pause, block, duplicate, delete }
 
 class _BlockMenu extends StatelessWidget {
   const _BlockMenu({
@@ -345,39 +494,39 @@ class _BlockMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     return PopupMenuButton<_BlockAction>(
       key: ValueKey('rule-menu-${rule.id}'),
-      tooltip: 'Options for ${rule.name}',
-      icon: const Icon(Icons.more_vert, color: BlockingColors.textMuted),
+      tooltip: 'More for ${rule.name}',
+      icon: const Glyph(Glyphs.more, size: 20, color: BlockingColors.textMuted),
       position: PopupMenuPosition.under,
       onSelected: onSelected,
       itemBuilder: (_) => [
-        _item(_BlockAction.edit, Icons.edit_outlined, 'Edit'),
+        _item(_BlockAction.edit, 'Edit'),
         if (!rule.enabled)
-          _item(_BlockAction.block, Icons.block, 'Block')
+          _item(_BlockAction.block, 'Turn on')
         else if (!locked)
-          _item(_BlockAction.pause, Icons.pause_circle_outline, 'Pause'),
-        _item(_BlockAction.duplicate, Icons.content_copy_outlined, 'Duplicate'),
+          _item(_BlockAction.pause, 'Pause'),
+        _item(_BlockAction.duplicate, 'Duplicate'),
         if (!locked)
-          _item(_BlockAction.delete, Icons.delete_outline, 'Delete', _danger),
+          _item(_BlockAction.delete, 'Delete', BlockingColors.danger),
       ],
     );
   }
 
   PopupMenuItem<_BlockAction> _item(
     _BlockAction action,
-    IconData icon,
     String label, [
-    Color color = Colors.white,
+    Color color = BlockingColors.text,
   ]) {
     return PopupMenuItem(
       key: ValueKey('rule-${action.name}'),
       value: action,
-      height: 44,
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 12),
-          Text(label, style: TextStyle(fontSize: 14, color: color)),
-        ],
+      height: 48,
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+          color: color,
+        ),
       ),
     );
   }
@@ -395,12 +544,4 @@ String _targetSummary(BlockRule rule) {
 
 String _count(int count, String singular, String plural) {
   return '$count ${count == 1 ? singular : plural}';
-}
-
-IconData _triggerIcon(Trigger trigger) {
-  return switch (trigger) {
-    Schedule() => Icons.schedule,
-    UsageQuota() => Icons.hourglass_bottom,
-    LaunchQuota() => Icons.repeat,
-  };
 }

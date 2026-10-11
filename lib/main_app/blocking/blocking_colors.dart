@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 
+/// A quiet paper palette: near-white space, black ink and one blue accent
+/// that only marks what is on.
 abstract final class BlockingColors {
-  static const background = Color(0xFF080A0F);
-  static const surface = Color(0xFF151820);
-  static const surfaceRaised = Color(0xFF20242E);
-  static const outline = Color(0xFF303642);
-  static const accent = Color(0xFF78A6FF);
-  static const rising = Color(0xFFF0A868);
-  static const onAccent = Color(0xFF07101F);
-  static const textMuted = Color(0xFFA6ADBA);
+  static const background = Color(0xFFFAFAF8);
+  static const surface = Color(0xFFF1F1EE);
+  static const surfaceRaised = Color(0xFFE7E7E3);
+  static const outline = Color(0xFFE2E2DE);
+  static const accent = Color(0xFF2F5BFF);
+  static const accentSoft = Color(0x1A2F5BFF);
+  static const rising = Color(0xFFE2622C);
+  static const danger = Color(0xFFD63B30);
+  static const onAccent = Color(0xFFFFFFFF);
+  static const text = Color(0xFF161618);
+  static const textMuted = Color(0xFF707075);
 }

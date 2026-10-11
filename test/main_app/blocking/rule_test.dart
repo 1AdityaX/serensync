@@ -5,6 +5,103 @@ const _packageName = 'com.example.focus';
 const _noUsage = AppUsage(foregroundTime: Duration.zero, launches: 0);
 
 void main() {
+  group('block status', () {
+    // A Monday morning.
+    final monday = DateTime(2026, 10, 12, 8);
+    const workday = Schedule(
+      weekdays: {1, 2, 3, 4, 5},
+      startMinute: 9 * 60,
+      endMinute: 17 * 60,
+    );
+
+    BlockRule block(Trigger trigger, {bool enabled = true}) => BlockRule(
+      id: 1,
+      name: 'Work',
+      packages: const {_packageName},
+      trigger: trigger,
+      enabled: enabled,
+    );
+
+    test('a schedule later today starts at its time', () {
+      expect(nextScheduleStart(workday, monday), DateTime(2026, 10, 12, 9));
+      expect(ruleStatus(block(workday), monday), 'Starts at 09:00');
+    });
+
+    test('a running schedule is blocking now', () {
+      expect(
+        ruleStatus(block(workday), DateTime(2026, 10, 12, 10)),
+        'Blocking now',
+      );
+    });
+
+    test('after the window it names the next day', () {
+      expect(
+        ruleStatus(block(workday), DateTime(2026, 10, 12, 18)),
+        'Starts tomorrow at 09:00',
+      );
+      expect(
+        ruleStatus(block(workday), DateTime(2026, 10, 16, 18)),
+        'Starts Mon at 09:00',
+      );
+    });
+
+    test('an all-day schedule starts at midnight of its next day', () {
+      const sundays = Schedule(
+        weekdays: {DateTime.sunday},
+        startMinute: 0,
+        endMinute: 0,
+        allDay: true,
+      );
+      expect(nextScheduleStart(sundays, monday), DateTime(2026, 10, 18));
+    });
+
+    test('a schedule with no days never starts', () {
+      const never = Schedule(weekdays: {}, startMinute: 60, endMinute: 120);
+      expect(nextScheduleStart(never, monday), isNull);
+      expect(ruleStatus(block(never), monday), 'No days chosen');
+    });
+
+    test('the short status fits in a word or two', () {
+      expect(ruleStatusShort(block(workday), monday), '09:00');
+      expect(
+        ruleStatusShort(block(workday), DateTime(2026, 10, 12, 10)),
+        'Now',
+      );
+      expect(
+        ruleStatusShort(block(workday), DateTime(2026, 10, 16, 18)),
+        'Mon 09:00',
+      );
+      expect(
+        ruleStatusShort(block(const LaunchQuota(5)), monday),
+        '5 opens a day',
+      );
+      expect(ruleStatusShort(block(workday, enabled: false), monday), 'Off');
+    });
+
+    test('only a running schedule counts as blocking now', () {
+      final at10 = DateTime(2026, 10, 12, 10);
+      expect(blockingNow(block(workday), at10), isTrue);
+      expect(blockingNow(block(workday, enabled: false), at10), isFalse);
+      expect(blockingNow(block(workday), monday), isFalse);
+      expect(
+        blockingNow(block(const UsageQuota(Duration(minutes: 5))), at10),
+        isFalse,
+      );
+    });
+
+    test('limits and paused blocks say so plainly', () {
+      expect(
+        ruleStatus(block(const UsageQuota(Duration(minutes: 45))), monday),
+        'Closes after 45m a day',
+      );
+      expect(
+        ruleStatus(block(const LaunchQuota(1)), monday),
+        'Closes after 1 open a day',
+      );
+      expect(ruleStatus(block(workday, enabled: false), monday), 'Paused');
+    });
+  });
+
   test('formats weekday selections readably', () {
     expect(weekdaySummary({DateTime.wednesday}), 'Wed');
     expect(

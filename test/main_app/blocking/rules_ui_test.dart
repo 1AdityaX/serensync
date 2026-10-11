@@ -149,12 +149,10 @@ void main() {
       blockingService,
     );
 
-    await tester.tap(find.byKey(const ValueKey('trigger-type')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Time'), findsWidgets);
-    expect(find.text('Usage limit'), findsOneWidget);
-    expect(find.text('Launch count'), findsOneWidget);
+    expect(find.byKey(const ValueKey('trigger-type')), findsOneWidget);
+    expect(find.text('Time'), findsOneWidget);
+    expect(find.text('Limit'), findsOneWidget);
+    expect(find.text('Opens'), findsOneWidget);
   });
 
   testWidgets('usage quota editor preserves selection while filtering', (
@@ -171,7 +169,7 @@ void main() {
       find.byKey(const ValueKey('rule-name')),
       'Social time',
     );
-    await _chooseTrigger(tester, 'Usage limit');
+    await _chooseTrigger(tester, 'usage');
     await _openCondition(tester);
     await tester.enterText(find.byKey(const ValueKey('usage-minutes')), '45');
     await _closeCondition(tester);
@@ -204,7 +202,7 @@ void main() {
       blockingService,
     );
     await _nameAndSelectAlpha(tester, name: 'Stop reopening');
-    await _chooseTrigger(tester, 'Launch count');
+    await _chooseTrigger(tester, 'launch');
     await _openCondition(tester);
     await tester.enterText(find.byKey(const ValueKey('launch-count')), '7');
     await _closeCondition(tester);
@@ -371,9 +369,7 @@ void main() {
   testWidgets('limits explain that web targets are blocked all day', (
     tester,
   ) async {
-    const note =
-        'Websites and keywords are blocked all day, because browsing time '
-        'does not count towards the limit.';
+    const note = 'Websites stay blocked all day: browsing time isn’t counted.';
     await _pumpEditor(
       tester,
       ruleStore,
@@ -381,7 +377,7 @@ void main() {
       permissionStatus,
       blockingService,
     );
-    await _chooseTrigger(tester, 'Usage limit');
+    await _chooseTrigger(tester, 'usage');
     await _openTargets(tester, 'keywords-summary');
     await _addTarget(tester, 'shorts');
     await _closeTargets(tester);
@@ -406,8 +402,14 @@ void main() {
         keywords: {'casino', 'bet'},
       ),
     );
+    final semantics = tester.ensureSemantics();
     await _pumpRules(tester, ruleStore, appService, blockingService);
-    expect(find.textContaining('1 app · 1 site · 2 keywords'), findsOneWidget);
+    // The card reads its contents out as one, so match within it.
+    expect(
+      find.bySemanticsLabel(RegExp('1 app · 1 site · 2 keywords')),
+      findsWidgets,
+    );
+    semantics.dispose();
 
     await _chooseRuleAction(tester, 15, 'pause');
 
@@ -423,7 +425,7 @@ void main() {
     await _chooseRuleAction(tester, 12, 'pause');
 
     expect(ruleStore.rules.single.enabled, isFalse);
-    expect(find.text('Paused blocks'), findsOneWidget);
+    expect(find.text('Paused'), findsOneWidget);
     expect(blockingService.syncs, 1);
   });
 
@@ -439,7 +441,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(ruleStore.rules.single.enabled, isTrue);
-    expect(find.text('Active blocks'), findsOneWidget);
+    expect(find.text('Active'), findsOneWidget);
     expect(blockingService.syncs, 1);
   });
 
@@ -478,8 +480,101 @@ void main() {
 
     expect(ruleStore.rules, isEmpty);
     expect(find.text('Temporary'), findsNothing);
-    expect(find.text('No blocks yet.'), findsOneWidget);
+    expect(find.text('No blocks yet'), findsOneWidget);
     expect(blockingService.syncs, 1);
+  });
+
+  testWidgets('the switch on a card pauses and resumes a block', (
+    tester,
+  ) async {
+    ruleStore.rules.add(_rule(id: 20, name: 'Focus', enabled: true));
+    await _pumpRules(tester, ruleStore, appService, blockingService);
+
+    await tester.tap(find.byKey(const ValueKey('rule-switch-20')));
+    await tester.pumpAndSettle();
+    expect(ruleStore.rules.single.enabled, isFalse);
+    expect(find.text('Paused'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('rule-switch-20')));
+    await tester.pumpAndSettle();
+    expect(ruleStore.rules.single.enabled, isTrue);
+    expect(blockingService.syncs, 2);
+  });
+
+  testWidgets('strict mode keeps an active block switched on', (tester) async {
+    ruleStore.rules
+      ..add(_rule(id: 21, name: 'On', enabled: true))
+      ..add(_rule(id: 22, name: 'Off', enabled: false));
+    await tester.pumpWidget(
+      _TestApp(
+        child: Scaffold(
+          body: RuleList(
+            ruleStore: ruleStore,
+            appService: appService,
+            blockingService: blockingService,
+            locked: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    Switch toggle(int id) =>
+        tester.widget<Switch>(find.byKey(ValueKey('rule-switch-$id')));
+    expect(toggle(21).onChanged, isNull);
+    expect(toggle(22).onChanged, isNotNull);
+  });
+
+  testWidgets('a block idea opens the editor already filled in', (
+    tester,
+  ) async {
+    await _pumpRules(tester, ruleStore, appService, blockingService);
+
+    await tester.tap(find.byKey(const ValueKey('block-idea-workday')));
+    await tester.pumpAndSettle();
+
+    final name = tester.widget<TextField>(
+      find.byKey(const ValueKey('rule-name')),
+    );
+    expect(name.controller!.text, 'Workday focus');
+    expect(find.text('09:00–17:00'), findsOneWidget);
+    expect(find.text('Mon–Fri'), findsOneWidget);
+  });
+
+  testWidgets('a deleted block can be brought back', (tester) async {
+    ruleStore.rules.add(_rule(id: 23, name: 'Evening', enabled: true));
+    await _pumpRules(tester, ruleStore, appService, blockingService);
+
+    await _chooseRuleAction(tester, 23, 'delete');
+    expect(ruleStore.rules, isEmpty);
+
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+
+    expect(ruleStore.rules.single.name, 'Evening');
+    expect(find.text('Evening'), findsOneWidget);
+    expect(blockingService.syncs, 2);
+  });
+
+  testWidgets('the editor sums the block up in a sentence', (tester) async {
+    final rule = _rule(id: 24, name: 'Alpha time', enabled: true);
+    ruleStore.rules.add(rule);
+    await _pumpEditor(
+      tester,
+      ruleStore,
+      appService,
+      permissionStatus,
+      blockingService,
+      rule: rule,
+    );
+
+    expect(
+      find.text('Closes Alpha once you have used it for 30m in a day.'),
+      findsOneWidget,
+    );
+
+    await _chooseTrigger(tester, 'launch');
+    expect(find.text('Closes Alpha after 5 opens in a day.'), findsOneWidget);
   });
 
   testWidgets('overnight schedule round-trips unchanged', (tester) async {
@@ -770,7 +865,10 @@ Future<void> _closeApps(WidgetTester tester) async {
 }
 
 Future<void> _openCondition(WidgetTester tester) async {
-  await tester.tap(find.byKey(const ValueKey('condition-summary')));
+  final summary = find.byKey(const ValueKey('condition-summary'));
+  await tester.ensureVisible(summary);
+  await tester.pumpAndSettle();
+  await tester.tap(summary);
   await tester.pumpAndSettle();
 }
 
@@ -787,10 +885,11 @@ Future<void> _tapApp(WidgetTester tester, String package) async {
   await tester.pump();
 }
 
-Future<void> _chooseTrigger(WidgetTester tester, String label) async {
-  await tester.tap(find.byKey(const ValueKey('trigger-type')));
+Future<void> _chooseTrigger(WidgetTester tester, String type) async {
+  final choice = find.byKey(ValueKey('trigger-type-$type'));
+  await tester.ensureVisible(choice);
   await tester.pumpAndSettle();
-  await tester.tap(find.text(label).last);
+  await tester.tap(choice);
   await tester.pumpAndSettle();
 }
 

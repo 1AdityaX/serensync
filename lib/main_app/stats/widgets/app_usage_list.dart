@@ -200,7 +200,7 @@ class _AppIconState extends State<_AppIcon> {
       child: icon == null
           ? Text(
               widget.name.isEmpty ? '?' : widget.name[0].toUpperCase(),
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
             )
           : Padding(
               padding: const EdgeInsets.all(5),

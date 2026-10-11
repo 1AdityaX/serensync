@@ -55,7 +55,6 @@ class _AppSearchBarState extends State<AppSearchBar> {
       decoration: BoxDecoration(
         color: BlockingColors.surface,
         borderRadius: BorderRadius.circular(23),
-        border: Border.all(color: BlockingColors.outline),
       ),
       child: Row(
         children: [
@@ -79,7 +78,7 @@ class _AppSearchBarState extends State<AppSearchBar> {
               controller: _controller,
               focusNode: _focusNode,
               decoration: const InputDecoration(
-                hintText: 'Search',
+                hintText: 'Search your apps',
                 border: InputBorder.none,
               ),
               onChanged: widget.onChanged,

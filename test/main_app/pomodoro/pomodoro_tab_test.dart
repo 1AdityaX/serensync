@@ -37,8 +37,12 @@ void main() {
   ) async {
     await _pump(tester, store, blockingService);
 
+    await tester.ensureVisible(find.byKey(const ValueKey('pomodoro-block-2')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('pomodoro-block-2')));
     await tester.pump();
+    await tester.ensureVisible(find.byType(TimerDial));
+    await tester.pumpAndSettle();
     final dial = find.byType(TimerDial);
     final centre = tester.getCenter(dial);
     final radius = tester.getSize(dial).width / 2 - 14;

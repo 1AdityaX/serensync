@@ -4,13 +4,16 @@ import 'package:flutter/material.dart';
 
 import '../../apps/app_service.dart';
 import '../../apps/installed_app.dart';
-import '../../theme.dart';
 import '../strict/strict_mode.dart';
 import 'blocking_colors.dart';
 import 'blocking_engine.dart';
 import 'onboarding/permission_status.dart';
 import 'rule.dart';
 import 'rule_store.dart';
+import '../../theme.dart';
+import '../common/cards.dart';
+import '../common/glyph_map.dart';
+import '../common/glyphs.dart';
 import 'widgets/app_picker.dart';
 import 'widgets/note.dart';
 import 'widgets/trigger_editor.dart';
@@ -27,6 +30,10 @@ class RuleEditorScreen extends StatefulWidget {
   /// the change tightens it.
   final bool locked;
 
+  /// Starting values for a new block, such as one picked from an idea.
+  final String? draftName;
+  final Trigger? draftTrigger;
+
   RuleEditorScreen({
     super.key,
     required this.ruleStore,
@@ -35,6 +42,8 @@ class RuleEditorScreen extends StatefulWidget {
     PermissionStatus? permissionStatus,
     this.locked = false,
     this.rule,
+    this.draftName,
+    this.draftTrigger,
   }) : permissionStatus = permissionStatus ?? PermissionStatus();
 
   @override
@@ -58,14 +67,27 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
   void initState() {
     super.initState();
     final rule = widget.rule;
-    _nameController = TextEditingController(text: rule?.name ?? '');
+    _nameController = TextEditingController(
+      text: rule?.name ?? widget.draftName ?? '',
+    );
     _packages = Set<String>.of(rule?.packages ?? const <String>{});
     _websites = Set<String>.of(rule?.websites ?? const <String>{});
     _keywords = Set<String>.of(rule?.keywords ?? const <String>{});
-    _trigger = rule?.trigger ?? TriggerEditor.defaultSchedule;
-    _appsLoad = widget.appService.getInstalledApps();
+    _trigger =
+        rule?.trigger ?? widget.draftTrigger ?? TriggerEditor.defaultSchedule;
+    _loadApps();
     WidgetsBinding.instance.addObserver(this);
     unawaited(_refreshAccessibility());
+  }
+
+  // App names feed the summary sentence, so they are kept once loaded.
+  void _loadApps() {
+    _appsLoad = widget.appService.getInstalledApps();
+    unawaited(
+      _appsLoad.then((apps) {
+        if (mounted) setState(() => _installedApps = apps);
+      }, onError: (Object _) {}),
+    );
   }
 
   @override
@@ -197,7 +219,8 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
     if (keywords != null && mounted) setState(() => _keywords = keywords);
   }
 
-  void _changeTriggerType(String? type) {
+  void _changeTriggerType(String type) {
+    if (type == _triggerType) return;
     setState(() {
       _trigger = switch (type) {
         'usage' => const UsageQuota(Duration(minutes: 30)),
@@ -211,12 +234,6 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
     Schedule() => 'schedule',
     UsageQuota() => 'usage',
     LaunchQuota() => 'launch',
-  };
-
-  IconData get _conditionIcon => switch (_trigger) {
-    Schedule() => Icons.schedule,
-    UsageQuota() => Icons.hourglass_bottom,
-    LaunchQuota() => Icons.repeat,
   };
 
   (String, String) get _conditionSummary => switch (_trigger) {
@@ -242,44 +259,87 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
     ),
   };
 
+  List<String> get _appNames => [
+    for (final app in _installedApps)
+      if (_packages.contains(app.packageName)) app.displayName,
+  ];
+
+  /// The whole block in one plain sentence.
+  String get _sentence {
+    final things = [..._appNames, ..._websites];
+    if (things.isEmpty && _keywords.isEmpty) {
+      return 'Start by choosing what this block should close.';
+    }
+    final String what;
+    if (things.isEmpty) {
+      what = 'pages that mention ${_list(_keywords.toList())}';
+    } else {
+      what = _list(things);
+    }
+    final when = switch (_trigger) {
+      final Schedule schedule when schedule.allDay =>
+        'all day, ${_days(schedule.weekdays)}',
+      final Schedule schedule when schedule.times.length > 1 =>
+        'in ${schedule.times.length} time windows, ${_days(schedule.weekdays)}',
+      final Schedule schedule =>
+        'from ${ruleTime(schedule.startMinute)} to '
+            '${ruleTime(schedule.endMinute)}, ${_days(schedule.weekdays)}',
+      final UsageQuota quota =>
+        'once you have used ${things.length > 1 ? 'them' : 'it'} for '
+            '${ruleDuration(quota.limit)} in a day',
+      final LaunchQuota quota =>
+        'after ${quota.limit} ${quota.limit == 1 ? 'open' : 'opens'} in a day',
+    };
+    return 'Closes $what $when.';
+  }
+
   @override
   Widget build(BuildContext context) {
     // Comparing schedules walks a whole week, so it happens once per build.
     final loosens = _loosens;
+    final empty = _packages.isEmpty && !_blocksWeb;
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.rule == null ? 'New block' : 'Edit block'),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-        children: [
-          _nameField(),
-          const SizedBox(height: 28),
-          _conditionSection(),
-          const SizedBox(height: 28),
-          _targetsSection(),
-          if (widget.locked && widget.rule != null) ...[
-            const SizedBox(height: 20),
-            Note(
-              key: const ValueKey('rule-locked'),
-              icon: Icons.shield,
-              message: loosens
-                  ? 'This change would loosen the block. Strict mode is on.'
-                  : 'Strict mode is on. This block can be tightened, not '
-                        'loosened.',
-            ),
+      // A short form, so every field is built and reachable at once.
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _Summary(_sentence),
+            const SizedBox(height: 24),
+            _targetsSection(),
+            const SizedBox(height: 28),
+            _conditionSection(),
+            const SizedBox(height: 28),
+            const Text('Name', style: sectionLabel),
+            const SizedBox(height: 10),
+            _nameField(),
+            if (widget.locked && widget.rule != null) ...[
+              const SizedBox(height: 20),
+              Note(
+                key: const ValueKey('rule-locked'),
+                icon: Icons.shield_outlined,
+                message: loosens
+                    ? 'This would loosen the block. Strict mode is on.'
+                    : 'Strict mode: tighten only.',
+              ),
+            ],
+            if (_saveError) ...[
+              const SizedBox(height: 20),
+              const Note(
+                icon: Icons.error_outline,
+                message: 'Couldn’t save. Try again.',
+              ),
+            ],
           ],
-          if (_saveError) ...[
-            const SizedBox(height: 20),
-            const Note(
-              icon: Icons.error_outline,
-              message: 'Could not save. Try again.',
-            ),
-          ],
-        ],
+        ),
       ),
       bottomNavigationBar: _bottomAction(
-        _saving || loosens || (_packages.isEmpty && !_blocksWeb),
+        disabled: _saving || loosens || empty,
+        hint: empty ? 'Pick something to block' : null,
       ),
     );
   }
@@ -289,9 +349,9 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
       key: const ValueKey('rule-name'),
       controller: _nameController,
       textCapitalization: TextCapitalization.sentences,
-      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
       decoration: InputDecoration(
-        hintText: _derivedName.isEmpty ? 'Name' : _derivedName,
+        hintText: _derivedName.isEmpty ? 'Optional' : _derivedName,
         filled: true,
         fillColor: BlockingColors.surface,
         contentPadding: const EdgeInsets.symmetric(
@@ -304,7 +364,7 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: BlockingColors.accent),
+          borderSide: const BorderSide(color: BlockingColors.text, width: 1.5),
         ),
       ),
     );
@@ -315,91 +375,68 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const Text('When', style: sectionLabel),
+        const SizedBox(height: 10),
         Row(
+          key: const ValueKey('trigger-type'),
           children: [
-            const Expanded(child: Text('When', style: sectionLabel)),
-            DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                key: const ValueKey('trigger-type'),
-                value: _triggerType,
-                borderRadius: BorderRadius.circular(14),
-                icon: const Icon(
-                  Icons.keyboard_arrow_down,
-                  color: BlockingColors.textMuted,
+            for (final (type, glyph, label) in const [
+              ('schedule', Glyphs.clock, 'Time'),
+              ('usage', Glyphs.hourglass, 'Limit'),
+              ('launch', Glyphs.launch, 'Opens'),
+            ]) ...[
+              if (type != 'schedule') const SizedBox(width: 10),
+              Expanded(
+                child: _Square(
+                  key: ValueKey('trigger-type-$type'),
+                  glyph: glyph,
+                  label: label,
+                  selected: _triggerType == type,
+                  onTap: () => _changeTriggerType(type),
                 ),
-                style: Theme.of(context).textTheme.bodyLarge!.copyWith(
-                  color: BlockingColors.accent,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'schedule', child: Text('Time')),
-                  DropdownMenuItem(value: 'usage', child: Text('Usage limit')),
-                  DropdownMenuItem(
-                    value: 'launch',
-                    child: Text('Launch count'),
-                  ),
-                ],
-                onChanged: _changeTriggerType,
               ),
-            ),
+            ],
           ],
         ),
-        const SizedBox(height: 8),
-        Material(
-          color: BlockingColors.surface,
-          borderRadius: BorderRadius.circular(20),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            key: const ValueKey('condition-summary'),
-            onTap: _editCondition,
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: BlockingColors.accent.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
+        const SizedBox(height: 10),
+        SoftCard(
+          key: const ValueKey('condition-summary'),
+          onTap: _editCondition,
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+          child: Row(
+            children: [
+              GlyphBadge(triggerGlyph(_trigger)),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      primary,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
                     ),
-                    child: Icon(
-                      _conditionIcon,
-                      size: 20,
-                      color: BlockingColors.accent,
+                    Text(
+                      secondary,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: BlockingColors.textMuted,
+                        fontSize: 13.5,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          primary,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          secondary,
-                          style: const TextStyle(
-                            color: BlockingColors.textMuted,
-                            fontSize: 13.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Icon(
-                    Icons.chevron_right,
-                    color: BlockingColors.textMuted,
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+              const Glyph(
+                Glyphs.chevronRight,
+                size: 20,
+                color: BlockingColors.textMuted,
+              ),
+            ],
           ),
         ),
       ],
@@ -410,50 +447,65 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('What to block', style: sectionLabel),
-        const SizedBox(height: 8),
-        FutureBuilder<List<InstalledApp>>(
-          future: _appsLoad,
-          builder: (context, snapshot) {
-            if (snapshot.hasData) {
-              _installedApps = snapshot.data!;
-              return _TargetTile(
-                key: const ValueKey('apps-summary'),
-                title: 'Apps',
-                count: _packages.length,
-                onTap: () => _selectApps(snapshot.data!),
-              );
-            }
-            if (snapshot.hasError) {
-              return _AppsLoadError(
-                onRetry: () => setState(
-                  () => _appsLoad = widget.appService.getInstalledApps(),
-                ),
-              );
-            }
-            return const _AppsLoading();
-          },
-        ),
+        const Text('Block', style: sectionLabel),
         const SizedBox(height: 10),
-        _TargetTile(
-          key: const ValueKey('websites-summary'),
-          title: 'Websites',
-          count: _websites.length,
-          onTap: _editWebsites,
-        ),
-        const SizedBox(height: 10),
-        _TargetTile(
-          key: const ValueKey('keywords-summary'),
-          title: 'Keywords',
-          count: _keywords.length,
-          onTap: _editKeywords,
+        Row(
+          children: [
+            Expanded(
+              child: FutureBuilder<List<InstalledApp>>(
+                future: _appsLoad,
+                builder: (context, snapshot) {
+                  if (snapshot.hasData) {
+                    return _Square(
+                      key: const ValueKey('apps-summary'),
+                      glyph: Glyphs.apps,
+                      label: 'Apps',
+                      count: _packages.length,
+                      onTap: () => _selectApps(snapshot.data!),
+                    );
+                  }
+                  if (snapshot.hasError) {
+                    return _Square(
+                      key: const ValueKey('apps-retry'),
+                      glyph: Glyphs.alert,
+                      label: 'Retry',
+                      onTap: () => setState(_loadApps),
+                    );
+                  }
+                  return const _Square(
+                    glyph: Glyphs.apps,
+                    label: 'Apps',
+                    loading: true,
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _Square(
+                key: const ValueKey('websites-summary'),
+                glyph: Glyphs.globe,
+                label: 'Websites',
+                count: _websites.length,
+                onTap: _editWebsites,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _Square(
+                key: const ValueKey('keywords-summary'),
+                glyph: Glyphs.search,
+                label: 'Keywords',
+                count: _keywords.length,
+                onTap: _editKeywords,
+              ),
+            ),
+          ],
         ),
         if (_blocksWeb && _accessibilityEnabled == false) ...[
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           Note(
-            message:
-                'Allow accessibility so SerenSync can read the address bar '
-                'and block websites and keywords.',
+            message: 'Websites need accessibility.',
             action: TextButton(
               key: const ValueKey('allow-accessibility'),
               onPressed: _requestAccessibility,
@@ -462,35 +514,52 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
           ),
         ],
         if (_blocksWeb && _trigger is! Schedule) ...[
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           const Note(
             message:
-                'Websites and keywords are blocked all day, because '
-                'browsing time does not count towards the limit.',
+                'Websites stay blocked all day: browsing time isn’t counted.',
           ),
         ],
       ],
     );
   }
 
-  Widget _bottomAction(bool disabled) {
+  Widget _bottomAction({required bool disabled, String? hint}) {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-        child: FilledButton(
-          key: const ValueKey('rule-save'),
-          onPressed: disabled ? null : _save,
-          child: _saving
-              ? const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: BlockingColors.onAccent,
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (hint != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                  hint,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: BlockingColors.textMuted,
                   ),
-                )
-              : Text(widget.rule == null ? 'Create' : 'Save'),
+                ),
+              ),
+            FilledButton(
+              key: const ValueKey('rule-save'),
+              onPressed: disabled ? null : _save,
+              child: _saving
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: BlockingColors.background,
+                      ),
+                    )
+                  : Text(widget.rule == null ? 'Create' : 'Save'),
+            ),
+          ],
         ),
       ),
     );
@@ -504,95 +573,145 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
   }
 }
 
-class _TargetTile extends StatelessWidget {
-  final String title;
-  final int count;
-  final VoidCallback onTap;
+String _list(List<String> items) {
+  if (items.length == 1) return items.single;
+  if (items.length == 2) return '${items.first} and ${items.last}';
+  return '${items.take(2).join(', ')} and ${items.length - 2} more';
+}
 
-  const _TargetTile({
+String _days(Set<int> weekdays) {
+  if (weekdays.length == 7) return 'every day';
+  if (weekdays.isEmpty) return 'on no days yet';
+  return 'on ${weekdaySummary(weekdays)}';
+}
+
+/// The whole block in one sentence, under the title.
+class _Summary extends StatelessWidget {
+  const _Summary(this.sentence);
+
+  final String sentence;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      sentence,
+      key: const ValueKey('rule-sentence'),
+      style: const TextStyle(
+        fontSize: 15,
+        height: 1.4,
+        color: BlockingColors.textMuted,
+      ),
+    );
+  }
+}
+
+/// A square tile: a glyph, a word, and a count or a selected state.
+class _Square extends StatelessWidget {
+  const _Square({
     super.key,
-    required this.title,
-    required this.count,
-    required this.onTap,
+    required this.glyph,
+    required this.label,
+    this.count,
+    this.selected = false,
+    this.loading = false,
+    this.onTap,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: BlockingColors.surface,
-      borderRadius: BorderRadius.circular(20),
-      clipBehavior: Clip.antiAlias,
-      child: ListTile(
-        minTileHeight: 72,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-        title: Text(
-          title,
-          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              count == 0 ? 'None' : '$count',
-              style: const TextStyle(
-                color: BlockingColors.textMuted,
-                fontSize: 15,
-              ),
-            ),
-            const SizedBox(width: 6),
-            const Icon(Icons.chevron_right, color: BlockingColors.textMuted),
-          ],
-        ),
-        onTap: onTap,
-      ),
-    );
-  }
-}
+  final Glyphs glyph;
+  final String label;
 
-class _AppsLoading extends StatelessWidget {
-  const _AppsLoading();
+  /// How many are chosen; null for tiles that are picked rather than filled.
+  final int? count;
+  final bool selected;
+  final bool loading;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 72,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        color: BlockingColors.surface,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: const Row(
-        children: [
-          Expanded(child: Text('Loading apps…')),
-          SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
+    final count = this.count;
+    final chosen = selected || (count ?? 0) > 0;
+    final Widget corner;
+    if (loading) {
+      corner = const SizedBox(
+        width: 16,
+        height: 16,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    } else if (count == null) {
+      corner = const SizedBox(height: 24);
+    } else if (count == 0) {
+      corner = const Glyph(
+        Glyphs.plus,
+        size: 18,
+        color: BlockingColors.textMuted,
+      );
+    } else {
+      corner = Container(
+        constraints: const BoxConstraints(minWidth: 24),
+        height: 24,
+        padding: const EdgeInsets.symmetric(horizontal: 7),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: BlockingColors.accent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          '$count',
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: BlockingColors.onAccent,
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AppsLoadError extends StatelessWidget {
-  final VoidCallback onRetry;
-
-  const _AppsLoadError({required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 12, 12),
-      decoration: BoxDecoration(
-        color: BlockingColors.surface,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        children: [
-          const Expanded(child: Text('Could not load your apps.')),
-          TextButton(onPressed: onRetry, child: const Text('Retry')),
-        ],
+        ),
+      );
+    }
+    return Semantics(
+      selected: selected,
+      button: true,
+      label: count == null ? label : '$label, $count chosen',
+      excludeSemantics: true,
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: SoftCard(
+          onTap: onTap,
+          radius: 20,
+          padding: const EdgeInsets.all(14),
+          color: selected ? BlockingColors.text : BlockingColors.surface,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Glyph(
+                    glyph,
+                    size: 26,
+                    color: selected
+                        ? BlockingColors.background
+                        : chosen
+                        ? BlockingColors.text
+                        : BlockingColors.textMuted,
+                  ),
+                  corner,
+                ],
+              ),
+              const Spacer(),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w600,
+                  color: selected
+                      ? BlockingColors.background
+                      : BlockingColors.text,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -257,7 +257,7 @@ class _PhonePainter extends CustomPainter {
       Offset(inner.left, inner.top + inner.height * 0.15),
       Offset(inner.left + inner.width * 0.6, inner.top + inner.height * 0.15),
       Paint()
-        ..color = Colors.white
+        ..color = BlockingColors.text
         ..strokeWidth = inner.height * 0.08
         ..strokeCap = StrokeCap.round,
     );

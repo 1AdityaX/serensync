@@ -90,7 +90,7 @@ void main() {
     await tester.tap(find.text('SerenSync'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Create a block'), findsOneWidget);
+    expect(find.byKey(const ValueKey('today-create-block')), findsOneWidget);
     expect(appService.openedPackages, isEmpty);
   });
 
@@ -174,8 +174,8 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.call));
-    await tester.tap(find.byIcon(Icons.camera_alt));
+    await tester.tap(find.byTooltip('Phone'));
+    await tester.tap(find.byTooltip('Camera'));
 
     expect(dialerLaunches, 1);
     expect(cameraLaunches, 1);
@@ -279,14 +279,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Create a block'), findsOneWidget);
+    expect(find.byKey(const ValueKey('today-create-block')), findsOneWidget);
     expect(find.byType(PageView), findsNothing);
     expect(blockingService.syncs, 1);
 
-    await tester.tap(find.text('Settings'));
-    await tester.pump();
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
 
-    expect(find.text('Minimal launcher'), findsOneWidget);
+    expect(find.text('Minimal home screen'), findsOneWidget);
     expect(find.text('App blocking'), findsNothing);
   });
 
@@ -308,7 +308,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('4 hours 37 minutes a day.'), findsOneWidget);
-      expect(find.text('Create a block'), findsNothing);
+      expect(find.byKey(const ValueKey('today-create-block')), findsNothing);
 
       await tester.tap(find.byKey(const ValueKey('onboarding-skip')));
       await tester.pumpAndSettle();
@@ -318,7 +318,7 @@ void main() {
       }
 
       expect(onboardingStore.complete, isTrue);
-      expect(find.text('Create a block'), findsOneWidget);
+      expect(find.byKey(const ValueKey('today-create-block')), findsOneWidget);
     },
   );
 

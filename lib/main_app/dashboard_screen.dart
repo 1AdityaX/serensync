@@ -3,20 +3,24 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../apps/app_service.dart';
-import '../theme.dart';
 import 'blocking/blocking_colors.dart';
 import 'blocking/blocking_engine.dart';
 import 'blocking/onboarding/permission_status.dart';
+import 'blocking/rule_editor_screen.dart';
 import 'blocking/rule_store.dart';
 import 'blocking/widgets/rule_list.dart';
+import 'common/cards.dart';
+import 'common/glyphs.dart';
 import 'pomodoro/pomodoro_store.dart';
 import 'pomodoro/pomodoro_tab.dart';
+import 'settings/settings_screen.dart';
 import 'stats/stats_tab.dart';
 import 'strict/strict_mode.dart';
 import 'strict/strict_mode_store.dart';
 import 'strict/strict_tab.dart';
+import 'today/today_tab.dart';
 
-enum _DashboardTab { pomodoro, blocks, strictMode, stats, settings }
+enum _DashboardTab { today, focus, blocks, strictMode, insights }
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
@@ -27,6 +31,7 @@ class DashboardScreen extends StatefulWidget {
     required this.permissionStatus,
     required this.pomodoroStore,
     required this.strictModeStore,
+    this.todayUsage = readTodayUsage,
   });
 
   final AppService appService;
@@ -35,6 +40,7 @@ class DashboardScreen extends StatefulWidget {
   final PermissionStatus permissionStatus;
   final PomodoroStore pomodoroStore;
   final StrictModeStore strictModeStore;
+  final Future<TodayUsage?> Function() todayUsage;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -42,9 +48,12 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen>
     with WidgetsBindingObserver {
-  _DashboardTab _tab = _DashboardTab.blocks;
+  _DashboardTab _tab = _DashboardTab.today;
   PermissionState? _permissions;
   bool _rulesLocked = false;
+
+  // Bumped to rebuild a tab from scratch after something outside it changed.
+  int _generation = 0;
 
   @override
   void initState() {
@@ -71,42 +80,77 @@ class _DashboardScreenState extends State<DashboardScreen>
     await widget.blockingService.sync(widget.ruleStore);
   }
 
+  void _show(_DashboardTab tab) => setState(() => _tab = tab);
+
+  Future<void> _allow(RequiredPermission permission) async {
+    await widget.permissionStatus.request(permission);
+    await _refresh();
+  }
+
+  Future<void> _createBlock() async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => RuleEditorScreen(
+          ruleStore: widget.ruleStore,
+          appService: widget.appService,
+          blockingService: widget.blockingService,
+          permissionStatus: widget.permissionStatus,
+          locked: _rulesLocked,
+        ),
+      ),
+    );
+    if ((saved ?? false) && mounted) {
+      setState(() {
+        _generation++;
+        _tab = _DashboardTab.blocks;
+      });
+    }
+  }
+
+  Future<void> _openSettings() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            SettingsScreen(permissionStatus: widget.permissionStatus),
+      ),
+    );
+    await _refresh();
+  }
+
   @override
   Widget build(BuildContext context) {
     final title = switch (_tab) {
-      _DashboardTab.pomodoro => 'Pomodoro',
+      _DashboardTab.today => '',
+      _DashboardTab.focus => 'Focus',
       _DashboardTab.blocks => 'Blocks',
       _DashboardTab.strictMode => 'Strict mode',
-      _DashboardTab.stats => 'Stats',
-      _DashboardTab.settings => 'Settings',
+      _DashboardTab.insights => 'Insights',
     };
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: AppBar(
+        title: Text(title),
+        actions: [
+          IconButton(
+            key: const ValueKey('open-settings'),
+            tooltip: 'Settings',
+            onPressed: () => unawaited(_openSettings()),
+            icon: const Glyph(Glyphs.settings),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: _buildBody(),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab.index,
-        onDestinationSelected: (index) =>
-            setState(() => _tab = _DashboardTab.values[index]),
+        onDestinationSelected: (index) => _show(_DashboardTab.values[index]),
         destinations: const [
+          NavigationDestination(icon: Glyph(Glyphs.sun), label: 'Today'),
+          NavigationDestination(icon: Glyph(Glyphs.timer), label: 'Focus'),
+          NavigationDestination(icon: Glyph(Glyphs.block), label: 'Blocks'),
+          NavigationDestination(icon: Glyph(Glyphs.shield), label: 'Strict'),
           NavigationDestination(
-            icon: Icon(Icons.timer_outlined),
-            label: 'Pomodoro',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.block_outlined),
-            label: 'Blocks',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.shield_outlined),
-            label: 'Strict',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.bar_chart_outlined),
-            label: 'Stats',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            label: 'Settings',
+            icon: Glyph(Glyphs.insights),
+            label: 'Insights',
           ),
         ],
       ),
@@ -114,29 +158,46 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Widget _buildBody() {
+    final key = ValueKey('${_tab.name}-$_generation');
     final body = switch (_tab) {
-      _DashboardTab.pomodoro => PomodoroTab(
+      _DashboardTab.today => TodayTab(
+        key: key,
+        appService: widget.appService,
+        ruleStore: widget.ruleStore,
+        pomodoroStore: widget.pomodoroStore,
+        strictModeStore: widget.strictModeStore,
+        permissions: _permissions,
+        usage: widget.todayUsage,
+        onAllow: (permission) => unawaited(_allow(permission)),
+        onCreateBlock: () => unawaited(_createBlock()),
+        onOpenFocus: () => _show(_DashboardTab.focus),
+        onOpenBlocks: () => _show(_DashboardTab.blocks),
+        onOpenStrict: () => _show(_DashboardTab.strictMode),
+        onOpenInsights: () => _show(_DashboardTab.insights),
+      ),
+      _DashboardTab.focus => PomodoroTab(
+        key: key,
         ruleStore: widget.ruleStore,
         blockingService: widget.blockingService,
         pomodoroStore: widget.pomodoroStore,
       ),
       _DashboardTab.blocks => RuleList(
+        key: key,
         ruleStore: widget.ruleStore,
         appService: widget.appService,
         blockingService: widget.blockingService,
         locked: _rulesLocked,
       ),
       _DashboardTab.strictMode => StrictTab(
+        key: key,
         ruleStore: widget.ruleStore,
         blockingService: widget.blockingService,
         strictModeStore: widget.strictModeStore,
         onChanged: () => unawaited(_refresh()),
       ),
-      _DashboardTab.stats => StatsTab(appService: widget.appService),
-      _DashboardTab.settings => _SettingsTab(
-        permissions: _permissions,
-        onAllow: (permission) =>
-            unawaited(widget.permissionStatus.request(permission)),
+      _DashboardTab.insights => StatsTab(
+        key: key,
+        appService: widget.appService,
       ),
     };
     final permissions = _permissions;
@@ -148,13 +209,15 @@ class _DashboardScreenState extends State<DashboardScreen>
         ? RequiredPermission.overlay
         : null;
     final enforces =
-        _tab != _DashboardTab.stats && _tab != _DashboardTab.settings;
+        _tab == _DashboardTab.focus ||
+        _tab == _DashboardTab.blocks ||
+        _tab == _DashboardTab.strictMode;
     if (missing == null || !enforces) return body;
     return Column(
       children: [
         _PermissionBanner(
           permission: missing,
-          onAllow: () => unawaited(widget.permissionStatus.request(missing)),
+          onAllow: () => unawaited(_allow(missing)),
         ),
         Expanded(child: body),
       ],
@@ -176,16 +239,22 @@ class _PermissionBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: BlockingColors.surface,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: SoftCard(
+        padding: const EdgeInsets.fromLTRB(16, 6, 6, 6),
+        radius: 18,
         child: Row(
           children: [
+            const Glyph(Glyphs.alert, size: 20, color: BlockingColors.rising),
+            const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Blocking needs ${permissionTitle(permission).toLowerCase()}.',
-                style: const TextStyle(fontSize: 14),
+                permissionTitle(permission),
+                style: const TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
             TextButton(
@@ -196,58 +265,6 @@ class _PermissionBanner extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// Where a permission skipped during setup can be granted later.
-class _SettingsTab extends StatelessWidget {
-  const _SettingsTab({required this.permissions, required this.onAllow});
-
-  final PermissionState? permissions;
-  final ValueChanged<RequiredPermission> onAllow;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-      children: [
-        const _SettingsHeader('Permissions'),
-        for (final permission in RequiredPermission.values)
-          ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-            title: Text(permissionTitle(permission)),
-            trailing: permissions?.granted(permission) ?? false
-                ? const Icon(Icons.check, color: BlockingColors.accent)
-                : TextButton(
-                    onPressed: () => onAllow(permission),
-                    child: const Text('Allow'),
-                  ),
-          ),
-        const _SettingsHeader('Launcher'),
-        const ListTile(
-          contentPadding: EdgeInsets.symmetric(horizontal: 4),
-          title: Text('Minimal launcher'),
-          subtitle: Text(
-            'Coming soon',
-            style: TextStyle(color: BlockingColors.textMuted),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SettingsHeader extends StatelessWidget {
-  const _SettingsHeader(this.title);
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 20, 4, 4),
-      child: Text(title, style: sectionLabel),
     );
   }
 }

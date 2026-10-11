@@ -259,3 +259,88 @@ bool _timeBlocks(ScheduleTime time, Set<int> weekdays, DateTime now) {
 
   return minute >= time.startMinute && weekdays.contains(now.weekday);
 }
+
+/// When [schedule] next starts blocking after [now], within a week, or null
+/// when it never does.
+DateTime? nextScheduleStart(Schedule schedule, DateTime now) {
+  DateTime? next;
+  for (var offset = 0; offset <= 7; offset++) {
+    final day = DateTime(now.year, now.month, now.day + offset);
+    if (!schedule.weekdays.contains(day.weekday)) continue;
+    final starts = schedule.allDay
+        ? const [0]
+        : [
+            for (final time in schedule.times)
+              if (time.startMinute != time.endMinute) time.startMinute,
+          ];
+    for (final minute in starts) {
+      final start = DateTime(day.year, day.month, day.day, 0, minute);
+      if (start.isAfter(now) && (next == null || start.isBefore(next))) {
+        next = start;
+      }
+    }
+    if (next != null) return next;
+  }
+  return next;
+}
+
+/// A short, plain status for a block, such as "Blocking now" or
+/// "Starts at 22:00".
+String ruleStatus(BlockRule rule, DateTime now) {
+  if (!rule.enabled) return 'Paused';
+  return switch (rule.trigger) {
+    final Schedule schedule when scheduleActive(schedule, now) =>
+      'Blocking now',
+    final Schedule schedule => switch (nextScheduleStart(schedule, now)) {
+      null => 'No days chosen',
+      final start =>
+        'Starts ${_relativeDay(start, now)}${ruleTime(start.hour * 60 + start.minute)}',
+    },
+    final UsageQuota quota => 'Closes after ${ruleDuration(quota.limit)} a day',
+    final LaunchQuota quota =>
+      'Closes after ${quota.limit} ${quota.limit == 1 ? 'open' : 'opens'} a day',
+  };
+}
+
+String _relativeDay(DateTime day, DateTime now) {
+  const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  final today = DateTime(now.year, now.month, now.day);
+  final date = DateTime(day.year, day.month, day.day);
+  if (date == today) return 'at ';
+  if (date == DateTime(now.year, now.month, now.day + 1)) {
+    return 'tomorrow at ';
+  }
+  return '${names[day.weekday - 1]} at ';
+}
+
+/// Whether [rule] is blocking by the clock at [now]. Limits depend on usage,
+/// so they never count here.
+bool blockingNow(BlockRule rule, DateTime now) =>
+    rule.enabled &&
+    switch (rule.trigger) {
+      final Schedule schedule => scheduleActive(schedule, now),
+      _ => false,
+    };
+
+/// The status in a word or two for tight spaces: "Now", "21:00",
+/// "Tue 09:00", "45m a day", "5 opens" or "Off".
+String ruleStatusShort(BlockRule rule, DateTime now) {
+  if (!rule.enabled) return 'Off';
+  return switch (rule.trigger) {
+    final Schedule schedule when scheduleActive(schedule, now) => 'Now',
+    final Schedule schedule => switch (nextScheduleStart(schedule, now)) {
+      null => 'No days',
+      final start =>
+        '${_sameDate(start, now) ? '' : '${_dayNames[start.weekday - 1]} '}'
+            '${ruleTime(start.hour * 60 + start.minute)}',
+    },
+    final UsageQuota quota => '${ruleDuration(quota.limit)} a day',
+    final LaunchQuota quota =>
+      '${quota.limit} ${quota.limit == 1 ? 'open' : 'opens'} a day',
+  };
+}
+
+const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+bool _sameDate(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;

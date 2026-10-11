@@ -217,130 +217,148 @@ class _Setup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
+    return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-      children: [
-        Center(
-          child: TimerDial(
-            fraction: settings.focus.inMinutes / 60,
-            color: BlockingColors.accent,
-            onFractionChanged: _setFocus,
-            child: _DialCenter(
-              clock: '${settings.focus.inMinutes}:00',
-              label: 'Focus',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: TimerDial(
+              fraction: settings.focus.inMinutes / 60,
+              color: BlockingColors.accent,
+              onFractionChanged: _setFocus,
+              child: _DialCenter(
+                clock: '${settings.focus.inMinutes}:00',
+                label: 'Focus',
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 28),
-        Row(
-          children: [
-            Expanded(
-              child: _Stepper(
-                label: 'Break',
-                value: '${settings.shortBreak.inMinutes} min',
-                onLess: settings.shortBreak.inMinutes > 1
-                    ? () => onSettings(
-                        settings.copyWith(
-                          shortBreak:
-                              settings.shortBreak - const Duration(minutes: 1),
-                        ),
-                      )
-                    : null,
-                onMore: settings.shortBreak.inMinutes < 30
-                    ? () => onSettings(
-                        settings.copyWith(
-                          shortBreak:
-                              settings.shortBreak + const Duration(minutes: 1),
-                        ),
-                      )
-                    : null,
-              ),
-            ),
-            Expanded(
-              child: _Stepper(
-                label: 'Long break',
-                value: '${settings.longBreak.inMinutes} min',
-                onLess: settings.longBreak.inMinutes > 5
-                    ? () => onSettings(
-                        settings.copyWith(
-                          longBreak:
-                              settings.longBreak - const Duration(minutes: 5),
-                        ),
-                      )
-                    : null,
-                onMore: settings.longBreak.inMinutes < 60
-                    ? () => onSettings(
-                        settings.copyWith(
-                          longBreak:
-                              settings.longBreak + const Duration(minutes: 5),
-                        ),
-                      )
-                    : null,
-              ),
-            ),
-            Expanded(
-              child: _Stepper(
-                label: 'Rounds',
-                value: '${settings.rounds}',
-                onLess: settings.rounds > 1
-                    ? () => onSettings(
-                        settings.copyWith(rounds: settings.rounds - 1),
-                      )
-                    : null,
-                onMore: settings.rounds < 8
-                    ? () => onSettings(
-                        settings.copyWith(rounds: settings.rounds + 1),
-                      )
-                    : null,
-              ),
-            ),
-          ],
-        ),
-        const Padding(
-          padding: EdgeInsets.fromLTRB(0, 28, 0, 10),
-          child: Text('Blocked during focus', style: sectionLabel),
-        ),
-        if (rules.isEmpty)
-          const Text(
-            'No blocks yet. The timer still runs.',
-            style: TextStyle(color: BlockingColors.textMuted),
-          )
-        else
+          const SizedBox(height: 20),
           Wrap(
+            alignment: WrapAlignment.center,
             spacing: 8,
             runSpacing: 8,
             children: [
-              for (final rule in rules)
-                FilterChip(
-                  key: ValueKey('pomodoro-block-${rule.id}'),
-                  label: Text(rule.name),
-                  selected: selected.contains(rule.id),
-                  onSelected: (value) => onSelect(rule.id, value),
-                  showCheckmark: false,
-                  selectedColor: BlockingColors.accent,
-                  backgroundColor: BlockingColors.surface,
-                  labelStyle: TextStyle(
-                    color: selected.contains(rule.id)
-                        ? BlockingColors.onAccent
-                        : Colors.white,
-                    fontWeight: FontWeight.w600,
+              for (final minutes in const [15, 25, 50])
+                _Preset(
+                  key: ValueKey('pomodoro-preset-$minutes'),
+                  label: '$minutes min',
+                  selected: settings.focus.inMinutes == minutes,
+                  onTap: () => onSettings(
+                    settings.copyWith(focus: Duration(minutes: minutes)),
                   ),
-                  side: BorderSide(
-                    color: selected.contains(rule.id)
-                        ? BlockingColors.accent
-                        : BlockingColors.outline,
-                  ),
-                  shape: const StadiumBorder(),
                 ),
             ],
           ),
-        const SizedBox(height: 32),
-        FilledButton(
-          key: const ValueKey('pomodoro-primary'),
-          onPressed: onStart,
-          child: const Text('Start focus'),
-        ),
-      ],
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: _Stepper(
+                  label: 'Break',
+                  value: '${settings.shortBreak.inMinutes} min',
+                  onLess: settings.shortBreak.inMinutes > 1
+                      ? () => onSettings(
+                          settings.copyWith(
+                            shortBreak:
+                                settings.shortBreak -
+                                const Duration(minutes: 1),
+                          ),
+                        )
+                      : null,
+                  onMore: settings.shortBreak.inMinutes < 30
+                      ? () => onSettings(
+                          settings.copyWith(
+                            shortBreak:
+                                settings.shortBreak +
+                                const Duration(minutes: 1),
+                          ),
+                        )
+                      : null,
+                ),
+              ),
+              Expanded(
+                child: _Stepper(
+                  label: 'Long break',
+                  value: '${settings.longBreak.inMinutes} min',
+                  onLess: settings.longBreak.inMinutes > 5
+                      ? () => onSettings(
+                          settings.copyWith(
+                            longBreak:
+                                settings.longBreak - const Duration(minutes: 5),
+                          ),
+                        )
+                      : null,
+                  onMore: settings.longBreak.inMinutes < 60
+                      ? () => onSettings(
+                          settings.copyWith(
+                            longBreak:
+                                settings.longBreak + const Duration(minutes: 5),
+                          ),
+                        )
+                      : null,
+                ),
+              ),
+              Expanded(
+                child: _Stepper(
+                  label: 'Rounds',
+                  value: '${settings.rounds}',
+                  onLess: settings.rounds > 1
+                      ? () => onSettings(
+                          settings.copyWith(rounds: settings.rounds - 1),
+                        )
+                      : null,
+                  onMore: settings.rounds < 8
+                      ? () => onSettings(
+                          settings.copyWith(rounds: settings.rounds + 1),
+                        )
+                      : null,
+                ),
+              ),
+            ],
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(0, 28, 0, 10),
+            child: Text('Block during focus', style: sectionLabel),
+          ),
+          if (rules.isEmpty)
+            const Text(
+              'No blocks yet',
+              style: TextStyle(color: BlockingColors.textMuted),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final rule in rules)
+                  FilterChip(
+                    key: ValueKey('pomodoro-block-${rule.id}'),
+                    label: Text(rule.name),
+                    selected: selected.contains(rule.id),
+                    onSelected: (value) => onSelect(rule.id, value),
+                    showCheckmark: false,
+                    selectedColor: BlockingColors.text,
+                    backgroundColor: BlockingColors.surface,
+                    labelStyle: TextStyle(
+                      color: selected.contains(rule.id)
+                          ? BlockingColors.background
+                          : BlockingColors.text,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    side: BorderSide.none,
+                    shape: const StadiumBorder(),
+                  ),
+              ],
+            ),
+          const SizedBox(height: 32),
+          FilledButton(
+            key: const ValueKey('pomodoro-primary'),
+            onPressed: onStart,
+            child: const Text('Start focus'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -485,7 +503,7 @@ class _Message extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 24,
                         height: 1.2,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         letterSpacing: -0.4,
                       ),
                     ),
@@ -540,9 +558,9 @@ class _DialCenter extends StatelessWidget {
           clock,
           key: const ValueKey('pomodoro-clock'),
           style: const TextStyle(
-            fontSize: 60,
+            fontSize: 64,
             height: 1.1,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w300,
             letterSpacing: -2,
             fontFeatures: [FontFeature.tabularFigures()],
           ),
@@ -602,7 +620,7 @@ class _Stepper extends StatelessWidget {
                   value,
                   style: const TextStyle(
                     fontSize: 15,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -621,6 +639,48 @@ class _Stepper extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _Preset extends StatelessWidget {
+  const _Preset({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: Material(
+        color: selected ? BlockingColors.text : BlockingColors.surface,
+        shape: const StadiumBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: selected
+                    ? BlockingColors.background
+                    : BlockingColors.text,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

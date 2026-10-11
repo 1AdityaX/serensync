@@ -9,6 +9,16 @@ and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A Today tab, opened first, with a greeting, what is blocked right now, a
+  setup checklist for missing permissions, screen time against yesterday and
+  quick actions.
+- An on/off switch and a plain-language status on every block, undo after
+  deleting one, and starter ideas when there are none.
+- Icon tiles and a one-line summary in the block editor.
+- One-tap focus length presets.
+- A custom icon set and small illustrations, drawn in code.
+- A Settings screen that explains each permission and opens Android's home
+  app picker.
 - Strict mode with PIN, charger, timer, and schedule unlock conditions, an
   optional cooldown, an emergency unlock, and locks for blocks, the Settings
   app, the recent-apps screen, newly installed apps, and uninstalling through
@@ -27,6 +37,14 @@ and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A blocking overlay with a return-home action.
 
 ### Changed
+
+- A clean, minimal light look: black ink on near-white, one blue accent,
+  flat surfaces, the bundled Inter typeface and much less text.
+- The tabs are now Today, Focus, Blocks, Strict and Insights; Settings moved
+  behind the gear in the top bar.
+- The block screen shows a breathing circle and "Pause" instead of
+  "Blocked".
+- The home screen clock drops the ticking seconds and shows the date.
 
 - The blocking service now starts and stops by itself; the manual switch and
   the App blocking settings screen are gone.

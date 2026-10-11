@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'apps/app_service.dart';
 import 'launcher/apps_screen.dart';
@@ -63,6 +64,11 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: appTheme,
+      // Screens without an app bar still need dark bar icons.
+      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+        value: systemBars,
+        child: child!,
+      ),
       home: MainScreen(
         appService: appService,
         launcherController: launcherController,

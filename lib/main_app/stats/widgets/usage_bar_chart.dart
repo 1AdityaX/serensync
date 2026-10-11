@@ -81,18 +81,28 @@ class UsageBarChart extends StatelessWidget {
           children: [
             for (var index = 0; index < labels.length; index++)
               Expanded(
-                child: Text(
-                  labels[index],
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    height: 1,
-                    color: index == currentIndex
-                        ? Colors.white
-                        : BlockingColors.textMuted,
-                    fontWeight: index == currentIndex
-                        ? FontWeight.w700
-                        : FontWeight.w500,
+                // Hour labels are wider than their bar, so they may spill
+                // into the empty neighbours on either side.
+                child: SizedBox(
+                  height: 12,
+                  child: OverflowBox(
+                    maxWidth: 40,
+                    child: Text(
+                      labels[index],
+                      maxLines: 1,
+                      softWrap: false,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        height: 1,
+                        color: index == currentIndex
+                            ? BlockingColors.text
+                            : BlockingColors.textMuted,
+                        fontWeight: index == currentIndex
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -194,7 +204,6 @@ class _Callout extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: BlockingColors.surfaceRaised,
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: BlockingColors.outline),
                 ),
                 child: Text(
                   label,

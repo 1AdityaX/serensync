@@ -11,6 +11,7 @@ import '../blocking/rule.dart';
 import '../blocking/rule_store.dart';
 import '../blocking/widgets/note.dart';
 import '../pomodoro/timer_dial.dart';
+import '../common/glyphs.dart';
 import 'strict_mode.dart';
 import 'strict_mode_store.dart';
 import 'uninstall_guard.dart';
@@ -383,9 +384,9 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
             index: 0,
             child: _OptionCard(
               key: const ValueKey('strict-end-timer'),
-              icon: Icons.timer_outlined,
+              glyph: Glyphs.timer,
               title: 'Timer',
-              detail: 'Ends by itself. Nothing ends it earlier.',
+              detail: 'Ends on its own',
               selected: _timed,
               onTap: () => setState(() => _timed = true),
             ),
@@ -394,9 +395,9 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
             index: 1,
             child: _OptionCard(
               key: const ValueKey('strict-end-pin'),
-              icon: Icons.key_outlined,
+              glyph: Glyphs.key,
               title: 'PIN',
-              detail: 'Ends with a PIN. Give it to someone you trust.',
+              detail: 'Someone you trust keeps it',
               selected: !_timed,
               onTap: () => setState(() => _timed = false),
             ),
@@ -578,7 +579,7 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
   }) {
     return _ToggleCard(
       switchKey: ValueKey('strict-lock-${lock.name}'),
-      icon: _lockIcon(lock),
+      glyph: _lockGlyph(lock),
       title: _lockTitle(lock),
       detail: detail ?? _lockDetail(lock),
       value: on,
@@ -591,7 +592,7 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
     final cooldown = _cooldownOrNull;
     return [
       (
-        icon: Icons.event,
+        icon: Glyphs.clock,
         eyebrow: 'Ends',
         value: _timed
             ? '${_untilLabel(now.add(_timerLength), now, l10n)}. Nothing '
@@ -602,7 +603,7 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
                   'ask to unlock.',
       ),
       (
-        icon: Icons.lock_outline,
+        icon: Glyphs.lock,
         eyebrow: 'Locked',
         value: [
           'Your blocks',
@@ -615,14 +616,14 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
       ),
       if (locks.contains(StrictLock.uninstall))
         (
-          icon: Icons.admin_panel_settings_outlined,
+          icon: Glyphs.shield,
           eyebrow: 'Device admin',
           value:
               'Android will ask for it. Allow it, or the lock does not '
               'start.',
         ),
       (
-        icon: Icons.health_and_safety_outlined,
+        icon: Glyphs.key,
         eyebrow: 'Emergency exit',
         value: _emergencyUsed
             ? 'Means retyping $emergencyTextLength random characters.'
@@ -815,7 +816,7 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 24,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       letterSpacing: -0.5,
                     ),
                   ),
@@ -847,7 +848,7 @@ class _StrictTabState extends State<StrictTab> with WidgetsBindingObserver {
   }
 }
 
-typedef _Fact = ({IconData icon, String eyebrow, String value});
+typedef _Fact = ({Glyphs icon, String eyebrow, String value});
 
 String _lockTitle(StrictLock lock) {
   return switch (lock) {
@@ -858,22 +859,21 @@ String _lockTitle(StrictLock lock) {
   };
 }
 
-IconData _lockIcon(StrictLock lock) {
+Glyphs _lockGlyph(StrictLock lock) {
   return switch (lock) {
-    StrictLock.settings => Icons.settings_outlined,
-    StrictLock.uninstall => Icons.admin_panel_settings_outlined,
-    StrictLock.recents => Icons.view_carousel_outlined,
-    StrictLock.newApps => Icons.download_outlined,
+    StrictLock.settings => Glyphs.settings,
+    StrictLock.uninstall => Glyphs.shield,
+    StrictLock.recents => Glyphs.layers,
+    StrictLock.newApps => Glyphs.arrowDown,
   };
 }
 
 String _lockDetail(StrictLock lock) {
   return switch (lock) {
-    StrictLock.settings => 'The Settings app is blocked.',
-    StrictLock.uninstall =>
-      'SerenSync cannot be uninstalled. Needs device admin.',
-    StrictLock.recents => 'The recent apps screen is blocked.',
-    StrictLock.newApps => 'Apps installed from now on are blocked.',
+    StrictLock.settings => 'The Settings app',
+    StrictLock.uninstall => 'Needs device admin',
+    StrictLock.recents => 'The recent apps screen',
+    StrictLock.newApps => 'Apps installed from now on',
   };
 }
 
@@ -1019,7 +1019,7 @@ class _StepPage extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 26,
                       height: 1.15,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       letterSpacing: -0.6,
                     ),
                   ),
@@ -1106,7 +1106,7 @@ class _BigLength extends StatelessWidget {
           key: ValueKey(text),
           style: const TextStyle(
             fontSize: 34,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
             letterSpacing: -1,
           ),
         ),
@@ -1184,14 +1184,14 @@ class _Entrance extends StatelessWidget {
 class _OptionCard extends StatelessWidget {
   const _OptionCard({
     super.key,
-    required this.icon,
+    required this.glyph,
     required this.title,
     required this.detail,
     required this.selected,
     required this.onTap,
   });
 
-  final IconData icon;
+  final Glyphs glyph;
   final String title;
   final String detail;
   final bool selected;
@@ -1206,7 +1206,7 @@ class _OptionCard extends StatelessWidget {
         color: BlockingColors.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
-          side: const BorderSide(color: BlockingColors.outline),
+          side: BorderSide.none,
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -1215,7 +1215,7 @@ class _OptionCard extends StatelessWidget {
             padding: const EdgeInsets.all(14),
             child: Row(
               children: [
-                _Badge(icon: icon, tint: tint),
+                _Badge(glyph: glyph, tint: tint),
                 const SizedBox(width: 14),
                 Expanded(
                   child: _CardText(title: title, detail: detail),
@@ -1238,8 +1238,8 @@ class _OptionCard extends StatelessWidget {
                     ),
                   ),
                   child: selected
-                      ? const Icon(
-                          Icons.check,
+                      ? const Glyph(
+                          Glyphs.check,
                           size: 16,
                           color: BlockingColors.onAccent,
                         )
@@ -1258,7 +1258,7 @@ class _OptionCard extends StatelessWidget {
 class _ToggleCard extends StatelessWidget {
   const _ToggleCard({
     required this.switchKey,
-    required this.icon,
+    required this.glyph,
     required this.title,
     required this.detail,
     required this.value,
@@ -1266,7 +1266,7 @@ class _ToggleCard extends StatelessWidget {
   });
 
   final Key switchKey;
-  final IconData icon;
+  final Glyphs glyph;
   final String title;
   final String detail;
   final bool value;
@@ -1282,7 +1282,7 @@ class _ToggleCard extends StatelessWidget {
         color: BlockingColors.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
-          side: const BorderSide(color: BlockingColors.outline),
+          side: BorderSide.none,
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -1291,7 +1291,7 @@ class _ToggleCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
             child: Row(
               children: [
-                _Badge(icon: locked ? Icons.lock : icon, tint: tint),
+                _Badge(glyph: locked ? Glyphs.lock : glyph, tint: tint),
                 const SizedBox(width: 14),
                 Expanded(
                   child: _CardText(title: title, detail: detail),
@@ -1303,7 +1303,7 @@ class _ToggleCard extends StatelessWidget {
                   activeTrackColor: BlockingColors.accent,
                   activeThumbColor: BlockingColors.onAccent,
                   inactiveTrackColor: BlockingColors.surfaceRaised,
-                  inactiveThumbColor: Colors.white70,
+                  inactiveThumbColor: BlockingColors.textMuted,
                   trackColor: locked
                       ? WidgetStatePropertyAll(
                           BlockingColors.accent.withValues(alpha: 0.45),
@@ -1335,7 +1335,7 @@ class _CardText extends StatelessWidget {
       children: [
         Text(
           title,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 3),
         Text(
@@ -1352,9 +1352,9 @@ class _CardText extends StatelessWidget {
 }
 
 class _Badge extends StatelessWidget {
-  const _Badge({required this.icon, required this.tint});
+  const _Badge({required this.glyph, required this.tint});
 
-  final IconData icon;
+  final Glyphs glyph;
   final Color tint;
 
   @override
@@ -1368,7 +1368,7 @@ class _Badge extends StatelessWidget {
         color: tint.withValues(alpha: 0.12),
         shape: BoxShape.circle,
       ),
-      child: Icon(icon, size: 20, color: tint),
+      child: Glyph(glyph, size: 21, color: tint),
     );
   }
 }
@@ -1404,7 +1404,9 @@ class _QuickPicks extends StatelessWidget {
                 : BlockingColors.surfaceRaised,
             labelStyle: TextStyle(
               fontWeight: FontWeight.w600,
-              color: option == value ? BlockingColors.onAccent : Colors.white,
+              color: option == value
+                  ? BlockingColors.onAccent
+                  : BlockingColors.text,
             ),
             side: BorderSide(
               color: option == value
@@ -1498,7 +1500,6 @@ class _DurationWheelsState extends State<_DurationWheels> {
       decoration: BoxDecoration(
         color: BlockingColors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: BlockingColors.outline),
       ),
       child: Row(
         children: [
@@ -1558,7 +1559,7 @@ class _Wheel extends StatelessWidget {
     final style = DefaultTextStyle.of(context).style.copyWith(
       fontSize: 26,
       fontWeight: FontWeight.w600,
-      color: Colors.white,
+      color: BlockingColors.text,
       fontFeatures: const [FontFeature.tabularFigures()],
     );
     return Expanded(
@@ -1793,7 +1794,7 @@ class _PinSheetState extends State<_PinSheet> {
         children: [
           const Text(
             'Enter your PIN',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 16),
           _PinDots(digits: _digits),
@@ -1915,7 +1916,7 @@ class _RingCenter extends StatelessWidget {
             style: const TextStyle(
               fontSize: 40,
               height: 1,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               letterSpacing: -1.2,
               fontFeatures: [FontFeature.tabularFigures()],
             ),
@@ -2058,7 +2059,7 @@ class _Card extends StatelessWidget {
       color: BlockingColors.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(color: BlockingColors.outline),
+        side: BorderSide.none,
       ),
       clipBehavior: Clip.antiAlias,
       child: Padding(padding: padding, child: child),
@@ -2107,7 +2108,7 @@ class _FactRow extends StatelessWidget {
               color: BlockingColors.accent.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: Icon(fact.icon, size: 18, color: BlockingColors.accent),
+            child: Glyph(fact.icon, size: 18, color: BlockingColors.accent),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -2118,7 +2119,7 @@ class _FactRow extends StatelessWidget {
                   fact.eyebrow,
                   style: const TextStyle(
                     fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: BlockingColors.textMuted,
                   ),
                 ),

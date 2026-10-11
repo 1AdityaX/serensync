@@ -103,7 +103,6 @@ class _WebTargetPickerState extends State<WebTargetPicker> {
       decoration: BoxDecoration(
         color: BlockingColors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: BlockingColors.outline),
       ),
       child: Row(
         children: [

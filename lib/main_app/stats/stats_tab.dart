@@ -30,7 +30,7 @@ const _months = [
   'Nov',
   'Dec',
 ];
-const _falling = Color(0xFF6FD08C);
+const _falling = Color(0xFF1E9E5A);
 
 typedef _Window = ({
   List<DateTime> starts,
@@ -202,7 +202,7 @@ class _StatsTabState extends State<StatsTab> with WidgetsBindingObserver {
           const SizedBox(height: 28),
           const Text(
             'Most used',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 16),
           if (view.report.apps.isEmpty)
@@ -272,7 +272,6 @@ class _StatsTabState extends State<StatsTab> with WidgetsBindingObserver {
       decoration: BoxDecoration(
         color: BlockingColors.surface,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: BlockingColors.outline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -329,7 +328,8 @@ class _StatsTabState extends State<StatsTab> with WidgetsBindingObserver {
           ),
           const SizedBox(width: 3),
           Text(
-            '${change.abs()}% vs $period',
+            '${change.abs()}%',
+            semanticsLabel: '${change.abs()}% vs $period',
             style: TextStyle(
               fontSize: 11.5,
               fontWeight: FontWeight.w600,
@@ -425,11 +425,11 @@ class _Total extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const figure = TextStyle(
-      fontSize: 40,
+      fontSize: 44,
       height: 1,
-      fontWeight: FontWeight.w700,
+      fontWeight: FontWeight.w300,
       letterSpacing: -1.2,
-      color: Colors.white,
+      color: BlockingColors.text,
       fontFeatures: [FontFeature.tabularFigures()],
     );
     const unit = TextStyle(
@@ -468,7 +468,6 @@ class _RangeToggle extends StatelessWidget {
       decoration: BoxDecoration(
         color: BlockingColors.surface,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: BlockingColors.outline),
       ),
       child: Row(
         children: [
@@ -484,7 +483,7 @@ class _RangeToggle extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: option == range
-                        ? BlockingColors.accent
+                        ? BlockingColors.text
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(999),
                   ),
@@ -492,9 +491,9 @@ class _RangeToggle extends StatelessWidget {
                     option == _Range.day ? 'Day' : 'Week',
                     style: TextStyle(
                       fontSize: 13.5,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       color: option == range
-                          ? BlockingColors.onAccent
+                          ? BlockingColors.background
                           : BlockingColors.textMuted,
                     ),
                   ),
@@ -518,13 +517,11 @@ class _NavButton extends StatelessWidget {
     return IconButton(
       onPressed: onPressed,
       icon: Icon(icon, size: 22),
-      color: Colors.white,
+      color: BlockingColors.text,
       disabledColor: BlockingColors.outline,
       style: IconButton.styleFrom(
         backgroundColor: BlockingColors.surface,
-        shape: const CircleBorder(
-          side: BorderSide(color: BlockingColors.outline),
-        ),
+        shape: const CircleBorder(side: BorderSide.none),
       ),
     );
   }
@@ -544,7 +541,6 @@ class _Tile extends StatelessWidget {
       decoration: BoxDecoration(
         color: BlockingColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: BlockingColors.outline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -564,7 +560,7 @@ class _Tile extends StatelessWidget {
             maxLines: 1,
             style: const TextStyle(
               fontSize: 18,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               letterSpacing: -0.4,
               fontFeatures: [FontFeature.tabularFigures()],
             ),
@@ -640,7 +636,7 @@ class _UsageAccessGate extends StatelessWidget {
             const SizedBox(height: 20),
             const Text(
               'Usage access needed',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             const Text(

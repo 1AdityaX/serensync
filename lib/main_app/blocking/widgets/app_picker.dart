@@ -104,7 +104,6 @@ class _AppPickerState extends State<AppPicker> {
       decoration: BoxDecoration(
         color: BlockingColors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: BlockingColors.outline),
       ),
       child: Row(
         children: [
@@ -169,7 +168,7 @@ class _AppPickerState extends State<AppPicker> {
           ),
           child: Text(
             app.displayName.isEmpty ? '?' : app.displayName[0].toUpperCase(),
-            style: const TextStyle(fontWeight: FontWeight.w700),
+            style: const TextStyle(fontWeight: FontWeight.w600),
           ),
         ),
         title: Text(

@@ -5,7 +5,14 @@ combines a quiet home screen with rules that interrupt distracting app use.
 
 ## What works
 
-- Minimal home screen with a clock, phone shortcut, and camera shortcut
+- A Today tab that greets you, says in plain words what is blocked right now,
+  compares today's screen time with yesterday by the same hour, lists any
+  setup steps still missing, and links to every main action
+- A clean, minimal light look: lots of space, black ink, one blue accent,
+  the bundled Inter typeface, and SerenSync's own icon set and small
+  illustrations in place of long explanations
+- Minimal home screen with a still clock, the date, phone and camera
+  shortcuts, and a hint that apps are one swipe away
 - Alphabetical app drawer with live search and package-change refresh
 - Persisted app list so the drawer can render before Android finishes a scan
 - App launch, system app settings, and uninstall actions
@@ -13,14 +20,18 @@ combines a quiet home screen with rules that interrupt distracting app use.
 - Daily foreground-time and launch-count limits
 - Website and keyword blocking in supported browsers, read from the address
   bar through an accessibility service
-- Enable, edit, and delete limits
-- Full-screen blocking overlay with a return-home action for apps and a
-  go-back action for pages
+- Enable, edit, and delete limits, with an on/off switch and a plain status
+  such as "Now" or "21:00" on every block, undo after a
+  delete, and ready-made ideas while there are no blocks yet
+- A block editor with icon tiles for what to close and when, an optional
+  name, and a one-line summary of the block as it changes
+- A calm full-screen pause over blocked apps and pages, with a slowly
+  breathing circle and a way back home or back a page
 - First-open intro that explains the problem, then walks through usage
   access, overlays, notifications, battery optimisation, and accessibility
   one permission at a time
 - Pomodoro focus sessions that lock chosen blocks for each focus round, with
-  adjustable focus, break and long-break lengths, a countdown in the
+  one-tap length presets, adjustable focus, break and long-break lengths, a countdown in the
   notification shade and an alert when a phase ends
 - Strict mode that locks blocks behind a timer of up to 99 days or a PIN with
   an optional cooldown, plus an emergency unlock; while on, blocks can only be
@@ -49,7 +60,14 @@ lib/
   onboarding/  first-open intro and permission walkthrough
   pomodoro/    focus sessions, their persistence and the phase alert
   strict/      strict mode model, persistence, guarded packages, and tab
+  today/       the Today landing tab
+  settings/    permissions, home-app shortcut, and privacy note
+  common/      shared cards, badges, and status pills
 ```
+
+The font in `assets/fonts` is Inter, subset to Latin, under the SIL Open
+Font License (`assets/fonts/OFL.txt`). Icons and illustrations are drawn in
+code in `lib/main_app/common/glyphs.dart` and `illustrations.dart`.
 
 The main product logic lives in `lib/main_app/blocking/rule.dart`. It is pure
 Dart: plugins, Flutter APIs, and ambient clock access do not cross that

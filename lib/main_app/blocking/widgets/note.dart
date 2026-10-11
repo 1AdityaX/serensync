@@ -21,12 +21,12 @@ class Note extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
       decoration: BoxDecoration(
-        border: Border.all(color: BlockingColors.outline),
+        color: BlockingColors.surface,
         borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
         children: [
-          Icon(icon, color: iconColor),
+          Icon(icon, size: 20, color: iconColor),
           const SizedBox(width: 12),
           Expanded(
             child: Text(

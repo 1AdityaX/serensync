@@ -319,7 +319,7 @@ class _ScheduleEditor extends StatelessWidget {
             children: [
               const Text(
                 'Times',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
               ),
               const Spacer(),
               const Text(
@@ -463,7 +463,7 @@ class _ScheduleEditor extends StatelessWidget {
             children: [
               const Text(
                 'Days',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
               ),
               const Spacer(),
               Text(
@@ -498,7 +498,9 @@ class _ScheduleEditor extends StatelessWidget {
         onPressed: () => _toggleWeekday(weekday, !selected),
         style: TextButton.styleFrom(
           padding: EdgeInsets.zero,
-          foregroundColor: selected ? BlockingColors.onAccent : Colors.white,
+          foregroundColor: selected
+              ? BlockingColors.onAccent
+              : BlockingColors.text,
           backgroundColor: selected
               ? BlockingColors.accent
               : BlockingColors.surfaceRaised,

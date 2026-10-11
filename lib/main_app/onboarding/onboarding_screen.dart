@@ -178,7 +178,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     if (!granted) {
       detail = Text(
         copy.how,
-        style: const TextStyle(fontSize: 14, height: 1.45, color: Colors.white),
+        style: const TextStyle(
+          fontSize: 14,
+          height: 1.45,
+          color: BlockingColors.text,
+        ),
       );
     } else if (permission == RequiredPermission.usageAccess && today != null) {
       detail = _TodayReveal(today);
@@ -187,7 +191,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         children: [
           Icon(Icons.check_circle, size: 20, color: BlockingColors.accent),
           SizedBox(width: 8),
-          Text('Allowed', style: TextStyle(fontSize: 14, color: Colors.white)),
+          Text(
+            'Allowed',
+            style: TextStyle(fontSize: 14, color: BlockingColors.text),
+          ),
         ],
       );
     }
@@ -359,7 +366,7 @@ class _Page extends StatelessWidget {
             style: const TextStyle(
               fontSize: 30,
               height: 1.15,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               letterSpacing: -0.6,
             ),
           ),
@@ -436,7 +443,6 @@ class _TodayReveal extends StatelessWidget {
       decoration: BoxDecoration(
         color: BlockingColors.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: BlockingColors.outline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -445,7 +451,7 @@ class _TodayReveal extends StatelessWidget {
             ruleDuration(report.total),
             style: const TextStyle(
               fontSize: 28,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               letterSpacing: -0.5,
               color: BlockingColors.rising,
             ),
