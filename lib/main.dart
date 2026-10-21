@@ -199,6 +199,8 @@ class _MainScreenState extends State<MainScreen> {
     if (!showLauncher && !onboarded) {
       return OnboardingScreen(
         permissionStatus: widget.permissionStatus,
+        appService: widget.appService,
+        ruleStore: widget.ruleStore,
         onFinished: () => unawaited(_completeOnboarding()),
       );
     }

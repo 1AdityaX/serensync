@@ -117,16 +117,12 @@ class _RuleEditorScreenState extends State<RuleEditorScreen>
   bool get _canSave =>
       !_saving && (_packages.isNotEmpty || _blocksWeb) && !_loosens;
 
-  String get _derivedName {
-    final names = [
-      for (final app in _installedApps)
-        if (_packages.contains(app.packageName)) app.displayName,
-      ..._websites,
-      ..._keywords,
-    ];
-    if (names.length <= 2) return names.join(', ');
-    return '${names.take(2).join(', ')} + ${names.length - 2} more';
-  }
+  String get _derivedName => ruleName([
+    for (final app in _installedApps)
+      if (_packages.contains(app.packageName)) app.displayName,
+    ..._websites,
+    ..._keywords,
+  ]);
 
   Future<void> _save() async {
     if (!_canSave) return;

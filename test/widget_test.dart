@@ -307,7 +307,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('4 hours 37 minutes a day.'), findsOneWidget);
+      expect(find.text('Your time back, starting today.'), findsOneWidget);
       expect(find.byKey(const ValueKey('today-create-block')), findsNothing);
 
       await tester.tap(find.byKey(const ValueKey('onboarding-skip')));
@@ -339,7 +339,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(HomeScreen), findsOneWidget);
-    expect(find.text('4 hours 37 minutes a day.'), findsNothing);
+    expect(find.text('Your time back, starting today.'), findsNothing);
   });
 
   test('queues a refresh while an app scan is running', () async {

@@ -139,6 +139,15 @@ void main() {
 
   test('formats every limit summary readably', () {
     expect(ruleTime(6 * 60 + 5), '06:05');
+  });
+
+  test('ruleName lists two targets and counts the rest', () {
+    expect(ruleName(['Instagram']), 'Instagram');
+    expect(ruleName(['Instagram', 'TikTok']), 'Instagram, TikTok');
+    expect(
+      ruleName(['Instagram', 'TikTok', 'X', 'Reddit']),
+      'Instagram, TikTok + 2 more',
+    );
     expect(ruleDuration(const Duration(minutes: 90)), '1h 30m');
     expect(
       triggerSummary(

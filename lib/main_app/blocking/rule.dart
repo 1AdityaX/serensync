@@ -225,6 +225,12 @@ String ruleDuration(Duration duration) {
   return '${hours}h ${minutes}m';
 }
 
+/// A block's name from what it covers: "Instagram, TikTok + 2 more".
+String ruleName(List<String> targets) {
+  if (targets.length <= 2) return targets.join(', ');
+  return '${targets.take(2).join(', ')} + ${targets.length - 2} more';
+}
+
 bool _matchesAddress(BlockRule rule, WebAddress address) {
   return rule.websites.any(
         (site) => address.host == site || address.host.endsWith('.$site'),

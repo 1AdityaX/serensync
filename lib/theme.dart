@@ -13,6 +13,12 @@ TextStyle get sectionLabel => TextStyle(
   color: BlockingColors.textMuted,
 );
 
+/// [milliseconds] of motion, or none when the system asks for less.
+Duration motion(BuildContext context, int milliseconds) =>
+    MediaQuery.disableAnimationsOf(context)
+    ? Duration.zero
+    : Duration(milliseconds: milliseconds);
+
 /// Status and navigation bar icons that contrast with the background.
 SystemUiOverlayStyle get systemBars {
   final dark = BlockingColors.dark;

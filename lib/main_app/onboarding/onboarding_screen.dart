@@ -3,24 +3,44 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../apps/app_service.dart';
+import '../../apps/installed_app.dart';
+import '../../theme.dart';
 import '../blocking/blocking_colors.dart';
 import '../blocking/onboarding/permission_status.dart';
 import '../blocking/rule.dart';
+import '../blocking/rule_store.dart';
+import '../common/glyph_map.dart';
+import '../common/glyphs.dart';
+import '../common/illustrations.dart';
 import '../stats/usage_report.dart';
 import 'onboarding_illustrations.dart';
+import 'plan.dart';
+import 'plan_quiz.dart';
 
-const _storyPages = 3;
-final _donePage = _storyPages + RequiredPermission.values.length;
-const _pageTurn = Duration(milliseconds: 320);
+// The promise, three questions and the plan they build, then a page for
+// each permission and the finish.
+const _goalPage = 1;
+const _appsPage = 2;
+const _limitPage = 3;
+const _planPage = 4;
+const _firstPermission = 5;
+final _donePage = _firstPermission + RequiredPermission.values.length;
 
+/// Asks a few questions, builds the first block from the answers, then
+/// walks through the permissions and saves the block on the way out.
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({
     super.key,
     required this.permissionStatus,
+    required this.appService,
+    required this.ruleStore,
     required this.onFinished,
   });
 
   final PermissionStatus permissionStatus;
+  final AppService appService;
+  final RuleStore ruleStore;
   final VoidCallback onFinished;
 
   @override
@@ -31,14 +51,26 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     with WidgetsBindingObserver {
   final PageController _controller = PageController();
   int _page = 0;
+  // Where Skip was pressed, so Back from the permissions returns there.
+  int _skippedFrom = 0;
+  bool _limitShown = false;
   PermissionState? _permissions;
   UsageReport? _today;
+  List<InstalledApp>? _apps;
+  bool _appsFailed = false;
+  Goal? _goal;
+  Trigger? _trigger;
+  Set<String> _packages = {};
+  BlockRule? _plan;
+  bool _saving = false;
+  bool _saveFailed = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     unawaited(_refresh());
+    unawaited(_loadApps());
   }
 
   @override
@@ -80,30 +112,114 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     await _refresh();
   }
 
+  Future<void> _loadApps() async {
+    setState(() => _appsFailed = false);
+    try {
+      final apps = await widget.appService.getInstalledApps();
+      if (mounted) setState(() => _apps = apps);
+    } catch (_) {
+      if (mounted) setState(() => _appsFailed = true);
+    }
+  }
+
   void _goTo(int page) {
+    final duration = motion(context, 320);
+    if (duration == Duration.zero) {
+      _controller.jumpToPage(page);
+      return;
+    }
     unawaited(
       _controller.animateToPage(
         page,
-        duration: _pageTurn,
+        duration: duration,
         curve: Curves.easeOutCubic,
       ),
     );
   }
 
-  void _next() {
-    if (_page == _donePage) {
-      widget.onFinished();
-    } else {
-      _goTo(_page + 1);
-    }
+  void _next() => _goTo(_page + 1);
+
+  // Answers stay when a question is revisited; a new goal starts its limit
+  // over, since the old one belongs to another kind of block.
+  void _pickGoal(Goal goal) {
+    setState(() {
+      if (goal != _goal) _trigger = goalTrigger(goal);
+      _goal = goal;
+    });
+    _goTo(_appsPage);
   }
+
+  List<String> get _names => [
+    for (final app in _apps ?? const <InstalledApp>[])
+      if (_packages.contains(app.packageName)) app.displayName,
+  ];
+
+  void _startPlan() {
+    _plan = BlockRule(
+      id: 0,
+      name: ruleName(_names),
+      packages: _packages,
+      trigger: _trigger!,
+      enabled: true,
+    );
+    _goTo(_firstPermission);
+  }
+
+  void _skip() {
+    _plan = null;
+    _skippedFrom = _page;
+    _goTo(_firstPermission);
+  }
+
+  void _back() => _goTo(
+    _page == _firstPermission && _plan == null ? _skippedFrom : _page - 1,
+  );
+
+  Future<void> _finish() async {
+    final plan = _plan;
+    if (plan == null) {
+      widget.onFinished();
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _saveFailed = false;
+    });
+    try {
+      await widget.ruleStore.insert(plan);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _saveFailed = true;
+        });
+      }
+      return;
+    }
+    widget.onFinished();
+  }
+
+  List<Answer?> get _answers => [
+    if (_goal case final goal?)
+      (glyph: goalGlyph(goal), label: goalTitle(goal))
+    else
+      null,
+    if (_packages.isNotEmpty)
+      (glyph: Glyphs.apps, label: appsChip(_names))
+    else
+      null,
+    if (_trigger case final trigger? when _limitShown)
+      (glyph: triggerGlyph(trigger), label: limitChip(trigger))
+    else
+      null,
+  ];
 
   @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: _page == 0,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _goTo(_page - 1);
+        if (!didPop) _back();
       },
       child: Scaffold(
         body: SafeArea(
@@ -111,8 +227,20 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             children: [
               _Progress(
                 page: _page,
-                onSkip: _page < _storyPages ? () => _goTo(_storyPages) : null,
+                onSkip: _page < _firstPermission ? _skip : null,
               ),
+              // The strip stays put while the questions turn beneath it.
+              // AnimatedSize cannot take a zero duration, so without motion
+              // the strip simply appears.
+              if (MediaQuery.disableAnimationsOf(context))
+                _strip()
+              else
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment.topCenter,
+                  child: _strip(),
+                ),
               Expanded(
                 child: PageView.builder(
                   controller: _controller,
@@ -129,44 +257,56 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  Widget _buildPage(int page) {
-    if (page < _storyPages) return _storyPage(page);
-    if (page == _donePage) return _finishedPage();
-    return _permissionPage(RequiredPermission.values[page - _storyPages]);
-  }
+  Widget _strip() => _page >= _goalPage && _page < _firstPermission
+      ? AnswerStrip(
+          answers: _answers,
+          onTap: (index) => _goTo(_goalPage + index),
+        )
+      : const SizedBox(width: double.infinity);
 
-  Widget _storyPage(int page) {
+  // Skipping scrolls past the questions, so the pages that need a goal
+  // stay blank until there is one.
+  Widget _buildPage(int page) {
+    final goal = _goal;
+    final trigger = _trigger;
     return switch (page) {
       0 => _Page(
-        illustration: _AnimatedHours(
-          from: 0,
-          to: 4.62,
-          color: BlockingColors.rising,
-        ),
-        title: '4 hours 37 minutes a day.',
-        body:
-            'That is the average day on a phone. Over a year it adds up to '
-            'seventy days.',
-        primary: ('Next', _next),
-      ),
-      1 => _Page(
-        illustration: const PickupTimeline(pickups: 58),
-        title: '58 pickups a day.',
-        body: 'Most last under two minutes. Almost none were planned.',
-        primary: ('Next', _next),
-      ),
-      _ => _Page(
         illustration: _AnimatedHours(
           from: 4.62,
           to: 1,
           color: BlockingColors.accent,
         ),
-        title: 'SerenSync closes the door.',
-        body:
-            'Pick the apps and set a limit. When it is reached, the app '
-            'closes and you land on a quiet home screen.',
-        primary: ('Set it up', _next),
+        title: 'Your time back, starting today.',
+        body: 'A few questions, then your plan.',
+        primary: ('Get started', _next),
       ),
+      _goalPage => GoalPage(selected: goal, onPick: _pickGoal),
+      _appsPage => AppsPage(
+        apps: _apps,
+        failed: _appsFailed,
+        selected: _packages,
+        onChanged: (packages) => setState(() => _packages = packages),
+        onRetry: () => unawaited(_loadApps()),
+        onNext: () {
+          setState(() => _limitShown = true);
+          _next();
+        },
+      ),
+      _limitPage when trigger != null => LimitPage(
+        trigger: trigger,
+        onChanged: (trigger) => setState(() => _trigger = trigger),
+        onNext: _packages.isEmpty ? null : _next,
+      ),
+      _planPage when goal != null && trigger != null && _packages.isNotEmpty =>
+        PlanPage(
+          goal: goal,
+          names: _names,
+          trigger: trigger,
+          onNext: _startPlan,
+        ),
+      _limitPage || _planPage => const SizedBox.shrink(),
+      _ when page == _donePage => _finishedPage(),
+      _ => _permissionPage(RequiredPermission.values[page - _firstPermission]),
     };
   }
 
@@ -212,13 +352,35 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   Widget _finishedPage() {
     final allGranted = _permissions?.requiredGranted ?? false;
+    const skipped = 'Anything you skipped can be allowed later from Settings.';
+    final plan = _plan;
+    if (plan == null) {
+      return _Page(
+        illustration: HourGrid(hours: 1, color: BlockingColors.accent),
+        title: 'Ready.',
+        body: allGranted
+            ? 'Create your first block and choose the apps it covers.'
+            : skipped,
+        primary: ('Continue', () => unawaited(_finish())),
+      );
+    }
+    final save = _saving ? null : () => unawaited(_finish());
+    if (_saveFailed) {
+      return _Page(
+        illustration: const Illustration(Scene.sunrise, size: 180),
+        title: 'Your plan did not save.',
+        body: 'Try again, or create it later from Blocks.',
+        primary: ('Try again', save),
+        secondary: ('Continue without it', widget.onFinished),
+      );
+    }
     return _Page(
-      illustration: HourGrid(hours: 1, color: BlockingColors.accent),
-      title: 'Ready.',
-      body: allGranted
-          ? 'Create your first block and choose the apps it covers.'
-          : 'Anything you skipped can be allowed later from Settings.',
-      primary: ('Continue', _next),
+      illustration: const Illustration(Scene.sunrise, size: 180),
+      title: "You're all set.",
+      body:
+          '${planSentence(_names, plan.trigger)} '
+          '${allGranted ? 'Change it any time from Blocks.' : skipped}',
+      primary: ('Open SerenSync', save),
     );
   }
 }
@@ -338,7 +500,7 @@ class _Page extends StatelessWidget {
   final String title;
   final String body;
   final Widget? detail;
-  final (String, VoidCallback) primary;
+  final (String, VoidCallback?) primary;
   final (String, VoidCallback)? secondary;
 
   @override
@@ -418,12 +580,9 @@ class _AnimatedHours extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: from, end: to),
-      duration: reduceMotion
-          ? Duration.zero
-          : const Duration(milliseconds: 1100),
+      duration: motion(context, 1100),
       curve: Curves.easeOutCubic,
       builder: (_, hours, _) => HourGrid(hours: hours, color: color),
     );

@@ -77,67 +77,6 @@ class _HourGridPainter extends CustomPainter {
       old.hours != hours || old.color != color;
 }
 
-/// A day as a timeline with one spike per pickup. Most spikes are short,
-/// like most sessions.
-class PickupTimeline extends StatelessWidget {
-  const PickupTimeline({super.key, required this.pickups});
-
-  final int pickups;
-
-  @override
-  Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 1.8,
-      child: CustomPaint(painter: _PickupTimelinePainter(pickups)),
-    );
-  }
-}
-
-class _PickupTimelinePainter extends CustomPainter {
-  const _PickupTimelinePainter(this.pickups);
-
-  final int pickups;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final random = Random(pickups);
-    final baseline = size.height * 0.72;
-    canvas.drawLine(
-      Offset(0, baseline),
-      Offset(size.width, baseline),
-      Paint()
-        ..color = BlockingColors.outline
-        ..strokeWidth = 1.5,
-    );
-
-    final spike = Paint()
-      ..color = BlockingColors.rising
-      ..strokeWidth = 2.5
-      ..strokeCap = StrokeCap.round;
-    final positions = List<double>.generate(
-      pickups,
-      (_) => 0.01 + random.nextDouble() * 0.98,
-    )..sort();
-    for (final position in positions) {
-      final roll = random.nextDouble();
-      final height = roll < 0.69
-          ? 0.16
-          : roll < 0.9
-          ? 0.34
-          : 0.62;
-      final x = position * size.width;
-      canvas.drawLine(
-        Offset(x, baseline),
-        Offset(x, baseline - size.height * height),
-        spike,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_PickupTimelinePainter old) => old.pickups != pickups;
-}
-
 enum PhoneScene { usage, overlay, notification, battery, browser }
 
 /// A phone frame showing the one thing a permission touches.
